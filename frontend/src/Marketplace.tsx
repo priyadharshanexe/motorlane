@@ -98,10 +98,6 @@ export function Home() {
   });
   const [category, setCategory] = useState("All");
   const vehicles = (query.data?.results ?? [])
-    .filter(
-      (v, index, rows) =>
-        rows.findIndex((other) => other.name === v.name) === index,
-    )
     .filter((v) => category === "All" || v.vehicle_type === category);
   return (
     <>
