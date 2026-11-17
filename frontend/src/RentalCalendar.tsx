@@ -1,3 +1,4 @@
+import { rentalToday } from "./rentalDates";
 import { useState } from 'react'
 import type { DateRange } from './api'
 import { overlapsUnavailableDates } from './marketplaceData'
@@ -5,7 +6,7 @@ import { overlapsUnavailableDates } from './marketplaceData'
 export function RentalCalendar({ start, end, unavailable, onSelect }: {
   start: string; end: string; unavailable: DateRange[]; onSelect: (start: string, end: string) => void
 }) {
-  const [today] = useState(() => new Date().toISOString().slice(0, 10))
+  const [today] = useState(() => rentalToday())
   const [month, setMonth] = useState(() => new Date((start || today).slice(0, 7) + '-01T00:00:00Z'))
   const year = month.getUTCFullYear()
   const index = month.getUTCMonth()

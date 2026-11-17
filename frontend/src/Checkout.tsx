@@ -1,3 +1,4 @@
+import { isRentalDate, rentalToday } from "./rentalDates";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -26,7 +27,9 @@ export function Checkout() {
     queryKey: ["vehicle", id],
     queryFn: () => api<VehicleDetail>(`vehicles/${id}/`),
   });
+  const validDates = isRentalDate(start) && isRentalDate(end) && start >= rentalToday() && end >= start;
   const quote = useQuery({
+    enabled: Boolean(id) && validDates,
     queryKey: ["checkout-quote", id, start, end],
     queryFn: () =>
       api<{ days: number; total_price: string }>(
@@ -34,6 +37,13 @@ export function Checkout() {
       ),
     retry: false,
   });
+  if (!validDates) return (
+    <section className="panel">
+      <h1>Choose your rental dates</h1>
+      <p>Select a pickup date and a return date on or after pickup to continue.</p>
+      <Link className="button" to={id ? "/vehicles/" + id : "/vehicles"}>Choose vehicle and dates</Link>
+    </section>
+  );
   if (vehicle.isPending) return <Busy />;
   if (!vehicle.data) return <Notice error={vehicle.error} />;
   const v = vehicle.data;
