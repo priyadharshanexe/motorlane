@@ -15,7 +15,7 @@ import { RentalCalendar } from "./RentalCalendar";
 import { FavoriteButton, Rating } from "./Favorites";
 import { Breadcrumb } from "./Breadcrumb";
 import { overlapsUnavailableDates } from "./marketplaceData";
-import heroImage from "./assets/studio-splendor.png";
+import heroImage from "./assets/studio-splendor.webp";
 
 type CatalogResult = {
   count: number;
