@@ -30,6 +30,22 @@ class BookingPermissionsTests(TestCase):
         user.save(update_fields=["account"])
         self.client.force_login(account)
 
+    def test_missed_confirmed_rental_expires_for_renter_and_owner(self):
+        yesterday = timezone.localdate() - timedelta(days=1)
+        Booking.objects.filter(pk=self.booking.pk).update(
+            status=Booking.Status.CONFIRMED, start_date=yesterday, end_date=yesterday,
+        )
+        self.sign_in(self.renter)
+        self.assertEqual(self.client.get(reverse("api_bookings")).json()[0]["status"], "Expired")
+        self.sign_in(self.owner)
+        pickup = reverse("api_booking_action", args=[self.booking.pk, "pickup"])
+        self.assertEqual(self.client.post(pickup).status_code, 409)
+        Booking.objects.filter(pk=self.booking.pk).update(status=Booking.Status.IN_PROGRESS)
+        self.sign_in(self.renter)
+        row = self.client.get(reverse("api_bookings")).json()[0]
+        self.assertEqual(row["status"], "In progress")
+        self.assertTrue(row["overdue"])
+
     def test_get_cannot_approve_booking(self):
         self.sign_in(self.owner)
         url = reverse("api_booking_action", args=[self.booking.pk, "approve"])

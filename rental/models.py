@@ -95,6 +95,8 @@ class Booking(models.Model):
             or (self.expires_at and self.expires_at <= timezone.now())
         ):
             return self.Status.EXPIRED
+        if self.status == self.Status.CONFIRMED and self.end_date < timezone.localdate():
+            return self.Status.EXPIRED
         return self.status
 
     @property
