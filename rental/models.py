@@ -59,6 +59,8 @@ class Booking(models.Model):
     end_date = models.DateField()
     contact_name = models.CharField(max_length=100, blank=True)
     contact_phone = models.CharField(max_length=30, blank=True)
+    conditions_accepted_at = models.DateTimeField(null=True, blank=True, editable=False)
+    conditions_version = models.CharField(max_length=40, blank=True, editable=False)
     pickup_notes = models.CharField(max_length=1000, blank=True)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)

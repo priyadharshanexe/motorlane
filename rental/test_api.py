@@ -18,6 +18,9 @@ class BookingApiTests(TestCase):
         data = {"vehicle_id": vehicle.pk, "start_date": today, "end_date": today}
         self.assertEqual(client.post(url, data, secure=True).status_code, 403)
         csrf = client.get(reverse("api_session"), secure=True).json()["csrf_token"]
+        self.assertEqual(client.post(url, data, secure=True, HTTP_X_CSRFTOKEN=csrf,
+                                     HTTP_REFERER="https://testserver/").status_code, 400)
+        data.update(contact_name="Test renter", contact_phone="+91 99999 00000", accepted_conditions=True)
         response = client.post(url, data, secure=True, HTTP_X_CSRFTOKEN=csrf,
                                HTTP_REFERER="https://testserver/")
         self.assertEqual(response.status_code, 201)
@@ -86,4 +89,7 @@ class CheckoutApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()['contact_name'], 'Rental Customer')
         self.assertEqual(response.json()['total_price'], '125.00')
-        self.assertEqual(Booking.objects.get().pickup_notes, data['pickup_notes'])
+        booking = Booking.objects.get()
+        self.assertEqual(booking.pickup_notes, data['pickup_notes'])
+        self.assertEqual(booking.conditions_version, 'rental-conditions-v1')
+        self.assertIsNotNone(booking.conditions_accepted_at)

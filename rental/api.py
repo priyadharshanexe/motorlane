@@ -121,11 +121,9 @@ def bookings(request):
         return Response(BookingSerializer(rows, many=True, context={"request": request}).data)
     if not isinstance(request.data, Mapping):
         return Response({"detail": "Expected an object."}, status=status.HTTP_400_BAD_REQUEST)
-    contact = None
-    if request.data.get("checkout"):
-        contact = CheckoutContactSerializer(data=request.data)
-        if not contact.is_valid():
-            return Response(contact.errors, status=400)
+    contact = CheckoutContactSerializer(data=request.data)
+    if not contact.is_valid():
+        return Response(contact.errors, status=400)
     vehicle_id = serializers.IntegerField(min_value=1)
     try:
         pk = vehicle_id.run_validation(request.data.get("vehicle_id"))
@@ -138,10 +136,14 @@ def bookings(request):
     try:
         with transaction.atomic():
             booking = reserve_vehicle(profile.pk, vehicle.pk, **dates.cleaned_data)
-            if contact is not None:
-                for field in ("contact_name", "contact_phone", "pickup_notes"):
-                    setattr(booking, field, contact.validated_data.get(field, ""))
-                booking.save(update_fields=["contact_name", "contact_phone", "pickup_notes"])
+            for field in ("contact_name", "contact_phone", "pickup_notes"):
+                setattr(booking, field, contact.validated_data.get(field, ""))
+            booking.conditions_accepted_at = timezone.now()
+            booking.conditions_version = "rental-conditions-v1"
+            booking.save(update_fields=[
+                "contact_name", "contact_phone", "pickup_notes",
+                "conditions_accepted_at", "conditions_version",
+            ])
     except ValidationError as error:
         return Response({"detail": error.messages[0]}, status=status.HTTP_409_CONFLICT)
     return Response(

@@ -8,6 +8,7 @@ from django.utils import timezone
 from .models import Booking, CustomUser, Vehicle
 
 
+CHECKOUT = {"contact_name": "Test renter", "contact_phone": "+91 99999 00000", "accepted_conditions": True}
 @override_settings(SECURE_SSL_REDIRECT=False)
 class BookingPermissionsTests(TestCase):
     def setUp(self):
@@ -56,11 +57,11 @@ class BookingPermissionsTests(TestCase):
         self.sign_in(self.renter)
         vehicle = self.booking.vehicle
         url = reverse("api_bookings")
-        self.assertContains(self.client.post(url, {"vehicle_id": vehicle.pk, "start_date": "invalid"}), "Enter a valid date", status_code=400)
+        self.assertContains(self.client.post(url, {**CHECKOUT, "vehicle_id": vehicle.pk, "start_date": "invalid"}), "Enter a valid date", status_code=400)
         vehicle.is_available = False
         vehicle.save(update_fields=["is_available"])
         today = timezone.localdate().isoformat()
-        response = self.client.post(url, {"vehicle_id": self.booking.vehicle_id, "start_date": today, "end_date": today})
+        response = self.client.post(url, {**CHECKOUT, "vehicle_id": self.booking.vehicle_id, "start_date": today, "end_date": today})
         self.assertContains(response, "This vehicle is no longer available.", status_code=409)
         self.assertEqual(Booking.objects.count(), 1)
 
@@ -70,10 +71,10 @@ class BookingPermissionsTests(TestCase):
         self.booking.start_date = self.booking.end_date = today
         self.booking.save(update_fields=["start_date", "end_date"])
         url = reverse("api_bookings")
-        response = self.client.post(url, {"vehicle_id": self.booking.vehicle_id, "start_date": today, "end_date": today})
+        response = self.client.post(url, {**CHECKOUT, "vehicle_id": self.booking.vehicle_id, "start_date": today, "end_date": today})
         self.assertContains(response, "Vehicle already booked for these dates.", status_code=409)
         tomorrow = today + timedelta(days=1)
-        response = self.client.post(url, {"vehicle_id": self.booking.vehicle_id, "start_date": tomorrow, "end_date": tomorrow})
+        response = self.client.post(url, {**CHECKOUT, "vehicle_id": self.booking.vehicle_id, "start_date": tomorrow, "end_date": tomorrow})
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Booking.objects.get(start_date=tomorrow).total_price, 100)
 
@@ -127,7 +128,7 @@ class BookingPermissionsTests(TestCase):
         self.sign_in(self.renter)
         today = timezone.localdate()
         response = self.client.post(reverse("api_bookings"), {
-            "vehicle_id": self.booking.vehicle_id, "start_date": today, "end_date": today,
+            **CHECKOUT, "vehicle_id": self.booking.vehicle_id, "start_date": today, "end_date": today,
         })
         self.assertEqual(response.status_code, 201)
         quote = Booking.objects.exclude(pk=self.booking.pk).get()
@@ -149,7 +150,7 @@ class BookingPermissionsTests(TestCase):
         self.assertEqual(self.client.post(maintenance, {**dates, "reason": "Service"}).status_code, 201)
         self.sign_in(self.renter)
         self.assertEqual(self.client.get(reverse("api_vehicle_list"), dates).json()["results"], [])
-        response = self.client.post(reverse("api_bookings"), {**dates, "vehicle_id": vehicle_id})
+        response = self.client.post(reverse("api_bookings"), {**CHECKOUT, **dates, "vehicle_id": vehicle_id})
         self.assertContains(response, "scheduled maintenance", status_code=409)
 
     def test_only_renter_can_review_completed_booking_once(self):
