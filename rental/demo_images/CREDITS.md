@@ -1,4 +1,4 @@
-# Demo photo credits
+# Motorlane demo image credits
 
 The demo images are licensed separately from the application code. They illustrate the vehicle models used in sample listings.
 
@@ -14,3 +14,5 @@ The homepage hero is an illustration.
 ## Additional illustrative demo images
 
 The Splendor, Honda City, Hyundai Venue, TVS Jupiter and Yamaha MT-15 PNG assets were generated with the built-in imagegen tool for this local demo. They are illustrative renders, not photographs of actual rental inventory. Listing descriptions disclose the sample specifications and generated imagery.
+
+For the complete AI-generated image inventory, processing details and project licensing scope, see [the root credits](../../CREDITS.md).

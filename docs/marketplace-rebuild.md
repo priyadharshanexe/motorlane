@@ -24,9 +24,9 @@ Headless Chrome checked main renter routes at 1440, 768 and 390 pixels, and owne
 
 ## Generated hero asset
 
-Built-in imagegen tool. Active asset: `frontend/src/assets/studio-splendor.png`.
+Built-in imagegen tool. Active asset: `frontend/src/assets/studio-splendor.webp`.
 
-The hero uses a newly generated realistic black Hero Honda Splendor studio render with chrome components, spoked wheels, and red/blue tank stripes. Its transparent background sits over a light ivory and pale-blue studio scene. CSS provides hover motion; this is not a rotatable 3D model. The earlier car render is retained as an unused design asset.
+The hero uses a newly generated realistic black Hero Honda Splendor studio render with chrome components, spoked wheels, and red/blue tank stripes. Its transparent background sits over a light ivory and pale-blue studio scene. CSS provides hover motion; this is not a rotatable 3D model. The earlier car render is used by authentication screens. See the root CREDITS.md for the complete image inventory.
 
 Dashboard metric cards now use meaningful SVG icons, and connected-account rows use the multicolor Google logo.
 

@@ -1,5 +1,7 @@
 # Motorlane - Vehicle Rental Marketplace
 
+[GitHub repository](https://github.com/priyadharshanexe/motorlane)
+
 Browse cars and bikes, request a rental for selected dates, and follow the
 booking through pickup and return. Vehicle owners manage their fleet,
 availability, incoming requests, maintenance, and completed booking value.
@@ -97,16 +99,16 @@ with `DJANGO_DEBUG=1`, then run `python manage.py seed_demo`. For Docker, use
 `docker compose --profile app run --rm -e RENTAL_DEMO_PASSWORD web python manage.py seed_demo`
 with the password exported in your shell.
 
-The demo creates `renter@rental-demo.example`, `owner@rental-demo.example`,
-plus three additional demo owners (`host`, `operator`, and `partner` at
-`rental-demo.example`). They share ten car and bike listings across Tamil Nadu.
-The renter has upcoming, active, and historical bookings. Sign in as the owner
-to see a pending request, scheduled handoffs, maintenance, and completed booking
-value. The primary owner has room to create one more listing.
+The seed creates renter and owner accounts at `rental-demo.example`, with
+upcoming, active and historical bookings. After seeding, run
+`python manage.py refresh_demo_catalog` to populate eight complete illustrative
+listings with distinct images. The command updates its demo records on reruns.
+Its optional `--archive-existing` flag archives other visible listings while
+preserving booking history. Use a disposable local database for demo setup.
 
-Use a disposable local database for a fresh demo. Rerunning the command
-preserves existing records and passwords. Booking dates and request expiration
-continue to advance normally after seeding.
+The demo catalog spans four cars and four bikes across Tamil Nadu. Specifications,
+prices and pickup instructions are sample data. Generated vehicle images are
+identified in listing descriptions and the [asset credits](CREDITS.md).
 
 Run `python manage.py test`, `npm --prefix frontend test`,
 `npm --prefix frontend run lint`, and `npm --prefix frontend run build`.
@@ -116,5 +118,6 @@ CI runs the Django suite on MySQL and checks the TypeScript application.
 
 ## License
 
-Application code is [MIT licensed](LICENSE). Demo photographs use their
-respective licenses.
+Application code and project documentation use the [MIT license](LICENSE).
+Bundled photographs retain their original licenses. See [all image and AI asset credits](CREDITS.md)
+and the [demo photograph attributions](rental/demo_images/CREDITS.md) for file-level details.
