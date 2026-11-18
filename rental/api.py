@@ -15,6 +15,8 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
+from rest_framework.exceptions import Throttled
 
 from .models import Booking, Feedback, Vehicle, Favorite
 from .views import (
@@ -22,6 +24,11 @@ from .views import (
     active_bookings, archive_listing, completed_booking_values, create_listing,
     rental_profile, rental_quote, reserve_vehicle, schedule_maintenance, search_vehicles, transition_booking,
 )
+
+
+class BookingCreationThrottle(UserRateThrottle):
+    scope = "booking_creation"
+    rate = "10/min"
 
 
 class VehicleSerializer(serializers.ModelSerializer):
@@ -119,6 +126,9 @@ def bookings(request):
     if request.method == "GET":
         rows = Booking.objects.filter(user=profile).select_related("vehicle", "user", "review").order_by("-start_date", "-pk")
         return Response(BookingSerializer(rows, many=True, context={"request": request}).data)
+    throttle = BookingCreationThrottle()
+    if not throttle.allow_request(request, None):
+        raise Throttled(wait=throttle.wait())
     if not isinstance(request.data, Mapping):
         return Response({"detail": "Expected an object."}, status=status.HTTP_400_BAD_REQUEST)
     contact = CheckoutContactSerializer(data=request.data)

@@ -93,3 +93,19 @@ class CheckoutApiTests(TestCase):
         self.assertEqual(booking.pickup_notes, data['pickup_notes'])
         self.assertEqual(booking.conditions_version, 'rental-conditions-v1')
         self.assertIsNotNone(booking.conditions_accepted_at)
+
+
+class BookingThrottleTests(TestCase):
+    def test_booking_posts_are_limited_without_blocking_history(self):
+        from django.core.cache import cache
+        cache.clear()
+        user = get_user_model().objects.create_user(username="throttle-renter")
+        self.client.force_login(user)
+        url = reverse("api_bookings")
+        for _ in range(10):
+            self.assertEqual(self.client.post(url, {}, secure=True).status_code, 400)
+        response = self.client.post(url, {}, secure=True)
+        self.assertEqual(response.status_code, 429)
+        self.assertIn("Retry-After", response)
+        self.assertEqual(self.client.get(url, secure=True).status_code, 200)
+        cache.clear()
