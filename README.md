@@ -8,7 +8,7 @@ availability, incoming requests, maintenance, and completed booking value.
 
 ![Motorlane marketplace homepage](docs/screenshots/marketplace.jpg)
 
-Screenshots refreshed on 18 November 2026 from the local Docker app using demo accounts.
+Screenshots refreshed on 18 November 2026 from the current Docker app, including the unbranded hero, optimized catalog images and whole-rupee prices. Signed-in pages use demo accounts.
 
 ## Architecture
 
