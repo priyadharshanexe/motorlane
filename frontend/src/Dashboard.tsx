@@ -35,12 +35,14 @@ export function Dashboard({ owner = false }: { owner?: boolean }) {
   );
   const recent = [...rows].sort((a, b) => b.id - a.id).slice(0, 4);
   const listings = fleet.data?.filter((row) => !row.archived_at);
+  const archivedCount = fleet.data?.filter((row) => row.archived_at).length;
   const nextTrip = upcoming[0];
   const spent = returned.reduce((sum, row) => sum + Number(row.total_price), 0);
   const metrics: [string, string | number | React.JSX.Element | undefined][] =
     owner
       ? [
-          ["Fleet listings", listings?.length],
+          ["Active fleet listings", listings?.length],
+          ["Archived listings", archivedCount],
           ["Published", listings?.filter((row) => row.is_available).length],
           ["Pending requests", bookings.data && pending.length],
           ["Active rentals", bookings.data && active.length],
@@ -109,6 +111,7 @@ export function Dashboard({ owner = false }: { owner?: boolean }) {
                 ? `${dateLabel(nextTrip.start_date)} — ${dateLabel(nextTrip.end_date)} · ${nextTrip.vehicle.location || "Local pickup"}`
                 : "Explore local rides and build a collection of your favorites."}
             </p>
+            {nextTrip && <Status value={nextTrip.status} />}
             <Link
               className="button"
               to={nextTrip ? `/bookings/${nextTrip.id}` : "/vehicles"}

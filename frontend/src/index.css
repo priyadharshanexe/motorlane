@@ -2653,3 +2653,15 @@ main {
 .hero-search { border:1px solid #e1e8f2; box-shadow:0 12px 35px #3b5e8a0b; }
 .hero-explore:hover,.hero-search button:hover { background:#244a87; }
 .hero-caption,.brand-strip { color:#60748f; }
+
+/* Accessible five-star review picker. */
+.review-rating { border:0; padding:0; margin:0; min-width:0; }
+.review-rating legend { font-weight:600; font-size:1rem; margin-bottom:10px; }
+.review-stars { display:flex; gap:8px; width:fit-content; }
+.review-star { position:relative; display:grid; place-items:center; width:48px; height:48px; cursor:pointer; border-radius:10px; }
+.review-star input { position:absolute; width:1px; height:1px; opacity:0; }
+.review-star svg { width:36px; height:36px; fill:transparent; stroke:#8291a8; stroke-width:1.5; transition:fill .15s,transform .15s; }
+.review-star[data-filled="true"] svg { fill:#e6a322; stroke:#b67b0b; }
+.review-star:hover svg { transform:scale(1.12); }
+.review-star:has(input:focus-visible) { outline:3px solid var(--accent); outline-offset:3px; }
+.review-rating p { min-height:22px; margin:8px 0 0; font-size:.85rem; color:var(--muted); }

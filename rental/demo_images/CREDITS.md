@@ -9,3 +9,8 @@ The demo images are licensed separately from the application code. They illustra
 - [2022Classic350.jpg](https://commons.wikimedia.org/wiki/File:2022Classic350.jpg) by Billyinthedarbies, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Resized and converted to WebP.
 
 The homepage hero is an illustration.
+
+
+## Additional illustrative demo images
+
+The Splendor, Honda City, Hyundai Venue, TVS Jupiter and Yamaha MT-15 PNG assets were generated with the built-in imagegen tool for this local demo. They are illustrative renders, not photographs of actual rental inventory. Listing descriptions disclose the sample specifications and generated imagery.

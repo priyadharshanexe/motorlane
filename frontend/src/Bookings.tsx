@@ -1,3 +1,4 @@
+import { rentalToday } from "./rentalDates";
 import { Breadcrumb } from "./Breadcrumb";
 import { Price, PriceBreakdown } from "./Pricing";
 import { useQuery } from "@tanstack/react-query";
@@ -33,7 +34,7 @@ const ownerActions: Partial<Record<Booking["status"], [string, string][]>> = {
 };
 export function Bookings({ owner = false }: { owner?: boolean }) {
   const { id } = useParams();
-  const [today] = useState(() => new Date().toISOString().slice(0, 10));
+  const [today] = useState(() => rentalToday());
   const [queue, setQueue] = useState("All");
   const [review, setReview] = useState<number | null>(null);
   const query = useQuery({
@@ -267,14 +268,7 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
                   )
                 }
               >
-                <label>
-                  Rating
-                  <select name="rating">
-                    {[5, 4, 3, 2, 1].map((value) => (
-                      <option key={value}>{value}</option>
-                    ))}
-                  </select>
-                </label>
+                <StarRating />
                 <label>
                   Comment
                   <textarea name="comment" required maxLength={500} />
@@ -320,5 +314,26 @@ function BookingTimeline({ row }: { row: Booking }) {
           ))}
       </ol>
     </section>
+  );
+}
+
+function StarRating() {
+  const [rating, setRating] = useState(0);
+  const [hover, setHover] = useState(0);
+  const descriptions = ["Tap a star to rate your ride", "Poor", "Fair", "Good", "Very good", "Excellent"];
+  return (
+    <fieldset className="review-rating">
+      <legend>Rate your experience</legend>
+      <div className="review-stars" onMouseLeave={() => setHover(0)}>
+        {[1, 2, 3, 4, 5].map(value => (
+          <label key={value} className="review-star" data-filled={value <= (hover || rating)} onMouseEnter={() => setHover(value)}>
+            <input type="radio" name="rating" value={value} required checked={rating === value}
+              onChange={() => setRating(value)} aria-label={`${value} ${value === 1 ? "star" : "stars"} — ${descriptions[value]}`} />
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.78 5.63L21 9.54l-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.93 1.06-6.2L3 9.54l6.22-.91L12 3Z" /></svg>
+          </label>
+        ))}
+      </div>
+      <p aria-live="polite">{rating ? `${rating} of 5 · ${descriptions[rating]}` : descriptions[0]}</p>
+    </fieldset>
   );
 }
