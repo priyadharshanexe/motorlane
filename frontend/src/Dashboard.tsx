@@ -163,7 +163,7 @@ export function Dashboard({ owner = false }: { owner?: boolean }) {
                   <div>
                     <h3>{vehicle.name}</h3>
                     <p>{vehicle.location}</p>
-                    <Price value={vehicle.price_per_day} label="/ day" />
+                    <Price value={vehicle.price_per_day} label="/day" />
                     <Status
                       value={vehicle.is_available ? "Published" : "Unpublished"}
                     />

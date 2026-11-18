@@ -1,5 +1,6 @@
+import { VehiclePreview } from "./VehiclePreview";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import {
   Link,
   useNavigate,
@@ -15,7 +16,7 @@ import { RentalCalendar } from "./RentalCalendar";
 import { FavoriteButton, Rating } from "./Favorites";
 import { Breadcrumb } from "./Breadcrumb";
 import { overlapsUnavailableDates } from "./marketplaceData";
-import heroImage from "./assets/studio-splendor.webp";
+import heroImage from "./assets/studio-commuter.webp";
 
 type CatalogResult = {
   count: number;
@@ -123,7 +124,7 @@ export function Home() {
           <img
             className="hero-vehicle"
             src={heroImage}
-            alt="Black Hero Honda Splendor motorcycle, realistic studio render"
+            alt="Unbranded black commuter motorcycle, realistic studio render"
           />
           <span className="hero-caption">THE FREEDOM TO GO YOUR WAY</span>
         </div>
@@ -263,7 +264,7 @@ export function Listing({
           {vehicle.seats && <span>{vehicle.seats} seats</span>}
         </div>
         <div className="listing-bottom">
-          <Price value={vehicle.price_per_day} label="/ day" />
+          <Price value={vehicle.price_per_day} label="/day" />
           <Link className="ride-book" to={url}>
             Explore ride <span aria-hidden="true">↗</span>
           </Link>
@@ -277,74 +278,6 @@ export function Listing({
         />
       )}
     </article>
-  );
-}
-function VehiclePreview({
-  vehicle,
-  url,
-  onClose,
-}: {
-  vehicle: Vehicle;
-  url: string;
-  onClose: () => void;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const node = dialog.current;
-    node?.showModal();
-    return () => node?.close();
-  }, []);
-  const details = useQuery({
-    queryKey: ["vehicle", String(vehicle.id)],
-    queryFn: () => api<VehicleDetail>(`vehicles/${vehicle.id}/`),
-  });
-  return (
-    <dialog
-      className="vehicle-preview"
-      ref={dialog}
-      aria-labelledby={`preview-${vehicle.id}`}
-      onCancel={onClose}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          const r = event.currentTarget.getBoundingClientRect();
-          if (
-            event.clientX < r.left ||
-            event.clientX > r.right ||
-            event.clientY < r.top ||
-            event.clientY > r.bottom
-          )
-            onClose();
-        }
-      }}
-    >
-      <button
-        className="preview-close"
-        aria-label="Close vehicle preview"
-        onClick={onClose}
-      >
-        ×
-      </button>
-      <Photo vehicle={vehicle} />
-      <div className="preview-copy">
-        <span className="eyebrow">TAKE A CLOSER LOOK</span>
-        <h2 id={`preview-${vehicle.id}`}>{vehicle.name}</h2>
-        <p>
-          {vehicle.location} · {vehicle.vehicle_type} · {vehicle.fuel_type}
-        </p>
-        <Rating vehicle={vehicle} />
-        <p>
-          {details.data?.description ||
-            "Choose your dates on the listing to see availability and review your rental."}
-        </p>
-        <Notice error={details.error} />
-        <div className="preview-footer">
-          <Price value={vehicle.price_per_day} label="/ day" />
-          <Link className="button" to={url}>
-            View details & dates →
-          </Link>
-        </div>
-      </div>
-    </dialog>
   );
 }
 export function Catalog() {
@@ -497,7 +430,7 @@ function VehicleReservation({
         <aside className="panel reservation">
           <span className="eyebrow">MAKE THIS RIDE YOURS</span>
           <h2>
-            <Price value={v.price_per_day} label="/ day" />
+            <Price value={v.price_per_day} label="/day" />
           </h2>
           <p>Choose your trip dates. Review everything before you request.</p>
           <form

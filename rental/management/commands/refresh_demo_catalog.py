@@ -15,15 +15,15 @@ CATALOG = [
      "A compact five-seat hatchback for everyday errands and short road trips."),
     ("Royal Enfield Classic 350", "Bike", "Coimbatore", "950", "Manual", 2, 2019, "classic-350.webp",
      "A classic-style motorcycle for relaxed rides and exploring local roads."),
-    ("Hero Honda Splendor", "Bike", "Madurai", "500", "Manual", 2, 2005, "splendor.png",
+    ("Hero Honda Splendor", "Bike", "Madurai", "500", "Manual", 2, 2005, "splendor.webp",
      "A lightweight commuter motorcycle for getting around town. Image is an illustrative studio render."),
-    ("Honda City", "Car", "Chennai", "2600", "Automatic", 5, 2022, "honda-city.png",
+    ("Honda City", "Car", "Chennai", "2600", "Automatic", 5, 2022, "honda-city.webp",
      "A comfortable sedan for city journeys and longer weekend drives. White exterior with a spacious five-seat cabin. Image is an illustrative studio render."),
-    ("Hyundai Venue", "Car", "Coimbatore", "2400", "Manual", 5, 2023, "hyundai-venue.png",
+    ("Hyundai Venue", "Car", "Coimbatore", "2400", "Manual", 5, 2023, "hyundai-venue.webp",
      "A compact SUV for everyday travel and weekend getaways. Blue exterior with a raised seating position. Image is an illustrative studio render."),
-    ("TVS Jupiter", "Bike", "Salem", "600", "Automatic", 2, 2022, "tvs-jupiter.png",
+    ("TVS Jupiter", "Bike", "Salem", "600", "Automatic", 2, 2022, "tvs-jupiter.webp",
      "An easy-to-ride automatic scooter for short city trips and daily errands. Bronze exterior and a comfortable two-person seat. Image is an illustrative studio render."),
-    ("Yamaha MT-15", "Bike", "Tiruchirappalli", "1100", "Manual", 2, 2023, "yamaha-mt15.png",
+    ("Yamaha MT-15", "Bike", "Tiruchirappalli", "1100", "Manual", 2, 2023, "yamaha-mt15.webp",
      "A sporty street motorcycle with an upright riding position, cyan accents and a lightweight profile. Image is an illustrative studio render."),
 ]
 
@@ -62,7 +62,7 @@ class Command(BaseCommand):
             vehicle.pickup_instructions = f"Demo pickup in {city}. Arrange the exact meeting point and handoff time with the owner after confirmation."
             vehicle.is_available = True
             vehicle.archived_at = None
-            if not vehicle.vehicle_image:
+            if not vehicle.vehicle_image or Path(vehicle.vehicle_image.name).suffix.lower() != ".webp":
                 vehicle.vehicle_image.save(image, ContentFile(images[image]), save=False)
             vehicle.full_clean()
             vehicle.save()

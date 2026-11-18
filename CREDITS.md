@@ -51,3 +51,7 @@ Project screenshots in `docs/screenshots/` were captured from the running
 Motorlane application with demo accounts on 18 November 2026. They include the
 assets credited above. Fonts are loaded from Google Fonts. DM Sans and Manrope
 retain their respective font licenses.
+
+Catalog WebP variants were resized to fit 1000 by 700 pixels and encoded at quality 84 on 18 November 2026. They retain the provenance of the corresponding PNG originals.
+
+The active homepage hero is now `frontend/src/assets/studio-commuter.webp`, an unbranded commuter motorcycle generated with the built-in OpenAI imagegen tool on 18 November 2026 and encoded as transparent WebP at quality 85. The earlier Splendor hero is retained as a previous asset.

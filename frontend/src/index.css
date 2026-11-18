@@ -2665,3 +2665,5 @@ main {
 .review-star:hover svg { transform:scale(1.12); }
 .review-star:has(input:focus-visible) { outline:3px solid var(--accent); outline-offset:3px; }
 .review-rating p { min-height:22px; margin:8px 0 0; font-size:.85rem; color:var(--muted); }
+
+.daily-price { gap: 0; }

@@ -58,7 +58,7 @@ export function FavoriteButton({ vehicle }: { vehicle: Vehicle }) {
 export function Rating({ vehicle }: { vehicle: Vehicle }) {
   return (
     <span className="vehicle-rating">
-      <span aria-hidden="true">★</span>{" "}
+      {vehicle.review_count > 0 && <span aria-hidden="true">★</span>}{" "}
       {vehicle.rating
         ? `${Number(vehicle.rating).toFixed(1)} · ${vehicle.review_count} review${vehicle.review_count === 1 ? "" : "s"}`
         : "New listing"}

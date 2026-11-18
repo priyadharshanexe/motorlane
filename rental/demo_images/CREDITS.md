@@ -16,3 +16,5 @@ The homepage hero is an illustration.
 The Splendor, Honda City, Hyundai Venue, TVS Jupiter and Yamaha MT-15 PNG assets were generated with the built-in imagegen tool for this local demo. They are illustrative renders, not photographs of actual rental inventory. Listing descriptions disclose the sample specifications and generated imagery.
 
 For the complete AI-generated image inventory, processing details and project licensing scope, see [the root credits](../../CREDITS.md).
+
+Catalog WebP variants were resized to fit 1000 by 700 pixels and encoded at quality 84 on 18 November 2026. They retain the provenance of the corresponding PNG originals.

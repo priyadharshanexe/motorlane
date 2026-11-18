@@ -77,7 +77,7 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const money = (value: string | number) => new Intl.NumberFormat('en-IN', {
-  style: 'currency', currency: 'INR',
+  style: 'currency', currency: 'INR', maximumFractionDigits: 0,
 }).format(Number(value))
 
 export function dateLabel(value: string) {
