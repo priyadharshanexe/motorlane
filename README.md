@@ -1,10 +1,12 @@
-# Vehicle Rental Marketplace
+# Motorlane - Vehicle Rental Marketplace
 
 Browse cars and bikes, request a rental for selected dates, and follow the
 booking through pickup and return. Vehicle owners manage their fleet,
 availability, incoming requests, maintenance, and completed booking value.
 
-![Vehicle Rental marketplace homepage](docs/screenshots/marketplace.jpg)
+![Motorlane marketplace homepage](docs/screenshots/marketplace.jpg)
+
+Screenshots refreshed on 18 November 2026 from the local Docker app using demo accounts.
 
 ## Architecture
 
