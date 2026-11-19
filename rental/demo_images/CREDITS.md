@@ -18,3 +18,5 @@ The Splendor, Honda City, Hyundai Venue, TVS Jupiter and Yamaha MT-15 PNG assets
 For the complete AI-generated image inventory, processing details and project licensing scope, see [the root credits](../../CREDITS.md).
 
 Catalog WebP variants were resized to fit 1000 by 700 pixels and encoded at quality 84 on 18 November 2026. They retain the provenance of the corresponding PNG originals.
+
+The Classic 350 WebP was further resized to fit 1000 by 700 pixels and re-encoded at quality 80 on 19 November 2026. Original author and CC BY-SA 4.0 attribution above continue to apply.
