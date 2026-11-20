@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from rental.models import Booking, BookingEvent, Profile, Feedback, MaintenanceBlock, Vehicle
 from rental.selectors import active_bookings
+from rental.services.photos import add_photo
 from rental.services.pricing import rental_quote
 
 
@@ -69,7 +70,7 @@ class Command(BaseCommand):
                 vehicle = fleet.create(owner=profiles[role], name=name, location=location, vehicle_type=kind,
                                        fuel_type="Petrol", price_per_day=Decimal(rate))
                 image = images / photo_names[name]
-                vehicle.vehicle_image.save(image.name, ContentFile(image.read_bytes()))
+                add_photo(vehicle, ContentFile(image.read_bytes(), name=image.name), cover=True)
             vehicles.append(vehicle)
 
         # Keep scenario dates stable even when the command is run on another day.

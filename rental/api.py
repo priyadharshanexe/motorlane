@@ -16,7 +16,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
-from .forms import BookingDatesForm, FeedbackForm, MaintenanceForm, ReportDatesForm, VehicleForm
+from .forms import BookingDatesForm, FeedbackForm, MaintenanceForm, PhotoForm, ReportDatesForm, VehicleForm
 from .models import Booking, Favorite, Feedback, Vehicle
 from .permissions import (
     PUBLIC, SESSION_AUTH, SIGNED_IN, owned_vehicles, owner_bookings, renter_bookings,
@@ -26,10 +26,11 @@ from .selectors import (
     with_review_summary,
 )
 from .serializers import (
-    BookingDetailSerializer, BookingEventSerializer, BookingSerializer, CheckoutContactSerializer, FleetVehicleSerializer, VehicleSerializer,
+    BookingDetailSerializer, BookingEventSerializer, PhotoSerializer, BookingSerializer, CheckoutContactSerializer, FleetVehicleSerializer, VehicleSerializer,
 )
 from .services.booking import reserve_vehicle, transition_booking
 from .services.listing import archive_listing, create_listing
+from .services.photos import add_photo, delete_photo, reorder, replace_cover, set_cover
 from .services.maintenance import schedule_maintenance
 from .services.pricing import price_rental
 from .services.profiles import rental_profile
@@ -67,7 +68,7 @@ class VehicleList(generics.ListAPIView):
     authentication_classes = SESSION_AUTH
     permission_classes = PUBLIC
     serializer_class = VehicleSerializer
-    queryset = listed_vehicles().order_by("name", "pk")
+    queryset = listed_vehicles().prefetch_related("photos").order_by("name", "pk")
 
     def list(self, request, *args, **kwargs):
         vehicles, _, errors = search_vehicles(request.query_params)
@@ -240,12 +241,16 @@ def fleet_vehicle(request, pk):
             return Response({"is_available": error.detail}, status=400)
         vehicle.save(update_fields=["is_available"])
         return Response(FleetVehicleSerializer(vehicle, context={"request": request}).data)
-    data = {field: request.data.get(field, getattr(vehicle, field)) for field in VehicleForm.Meta.fields
-            if field != "vehicle_image"}
+    data = {field: request.data.get(field, getattr(vehicle, field)) for field in VehicleForm.Meta.fields}
     form = VehicleForm(data, request.FILES, instance=vehicle)
     if not form.is_valid():
         return Response(form.errors, status=400)
     vehicle = form.save()
+    if form.cleaned_data.get("vehicle_image"):
+        try:
+            replace_cover(vehicle, form.cleaned_data["vehicle_image"])
+        except ValidationError as error:
+            return conflict(error)
     return Response(FleetVehicleSerializer(vehicle, context={"request": request}).data)
 
 
@@ -425,3 +430,55 @@ def payment_webhook(request):
     except ValueError:
         return Response({"detail": "Malformed event."}, status=400)
     return Response({"result": result})
+
+
+# Photos -----------------------------------------------------------------------------------
+
+@api_view(["GET", "POST"])
+@authentication_classes(SESSION_AUTH)
+@permission_classes(SIGNED_IN)
+def fleet_photos(request, pk):
+    """List a listing's photos, or upload one (multipart `image`, optional `cover`)."""
+    vehicle = get_object_or_404(owned_vehicles(request.user), pk=pk, archived_at__isnull=True)
+    if request.method == "GET":
+        return Response(PhotoSerializer(vehicle.photos.all(), many=True, context={"request": request}).data)
+    form = PhotoForm(request.data, request.FILES)
+    if not form.is_valid():
+        return Response(form.errors, status=400)
+    try:
+        photo = add_photo(vehicle, form.cleaned_data["image"], cover=form.cleaned_data["cover"])
+    except ValidationError as error:
+        return conflict(error)
+    return Response(PhotoSerializer(photo, context={"request": request}).data, status=201)
+
+
+@api_view(["PATCH", "DELETE"])
+@authentication_classes(SESSION_AUTH)
+@permission_classes(SIGNED_IN)
+def fleet_photo(request, pk, photo_id):
+    """PATCH {"cover": true} to make this the cover; DELETE to remove it."""
+    vehicle = get_object_or_404(owned_vehicles(request.user), pk=pk, archived_at__isnull=True)
+    get_object_or_404(vehicle.photos, pk=photo_id)
+    try:
+        if request.method == "DELETE":
+            delete_photo(vehicle, photo_id)
+            return Response(status=204)
+        if request.data.get("cover") in (True, "true", "1", 1):
+            set_cover(vehicle, photo_id)
+    except ValidationError as error:
+        return conflict(error)
+    return Response(PhotoSerializer(vehicle.photos.get(pk=photo_id), context={"request": request}).data)
+
+
+@api_view(["POST"])
+@authentication_classes(SESSION_AUTH)
+@permission_classes(SIGNED_IN)
+def fleet_photo_order(request, pk):
+    """Body {"order": [photo ids in display order]}."""
+    vehicle = get_object_or_404(owned_vehicles(request.user), pk=pk, archived_at__isnull=True)
+    ids = serializers.ListField(child=serializers.IntegerField()).run_validation(request.data.get("order"))
+    try:
+        reorder(vehicle, ids)
+    except ValidationError as error:
+        return Response({"order": error.messages}, status=400)
+    return Response(PhotoSerializer(vehicle.photos.all(), many=True, context={"request": request}).data)

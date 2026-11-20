@@ -6,7 +6,8 @@ from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
-from rental.models import Vehicle, Profile
+from rental.models import Profile, Vehicle
+from rental.services.photos import add_photo
 
 CATALOG = [
     ("Hyundai i20", "Car", "Madurai", "1800", "Manual", 5, 2018, "demo-car.webp",
@@ -62,8 +63,9 @@ class Command(BaseCommand):
             vehicle.pickup_instructions = f"Demo pickup in {city}. Arrange the exact meeting point and handoff time with the owner after confirmation."
             vehicle.is_available = True
             vehicle.archived_at = None
-            if not vehicle.vehicle_image or Path(vehicle.vehicle_image.name).suffix.lower() != ".webp":
-                vehicle.vehicle_image.save(image, ContentFile(images[image]), save=False)
             vehicle.full_clean()
             vehicle.save()
+            cover = vehicle.cover_photo
+            if cover is None or Path(cover.image.name).stem.split("_")[0] != Path(image).stem:
+                add_photo(vehicle, ContentFile(images[image], name=image), cover=True)
         self.stdout.write(self.style.SUCCESS(f"Archived {count} old listings; {len(CATALOG)} complete demo listings ready. Booking history preserved."))

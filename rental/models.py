@@ -52,7 +52,6 @@ class Vehicle(models.Model):
     )
     fuel_type = models.CharField(max_length=50)
     location = models.CharField(max_length=100, null=True, blank=True)
-    vehicle_image = models.ImageField(upload_to='vehicles/')
     description = models.TextField(blank=True, max_length=3000)
     transmission = models.CharField(max_length=30, blank=True)
     seats = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -78,8 +77,30 @@ class Vehicle(models.Model):
             models.Index(fields=["vehicle_type", "price_per_day"], name="vehicle_type_price"),
         ]
 
+    @property
+    def cover_photo(self):
+        photos = list(self.photos.all())  # uses prefetch_related("photos") when present
+        return next((p for p in photos if p.is_cover), photos[0] if photos else None)
+
     def __str__(self):
         return self.name
+
+
+class VehiclePhoto(models.Model):
+    """One of a vehicle's photos. Thumbnails are WebP renditions generated on upload."""
+
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name="photos")
+    image = models.ImageField(upload_to="vehicles/")
+    thumb_small = models.ImageField(upload_to="vehicles/thumbs/", blank=True)
+    thumb_large = models.ImageField(upload_to="vehicles/thumbs/", blank=True)
+    order = models.PositiveSmallIntegerField(default=0)
+    is_cover = models.BooleanField(default=False)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["order", "pk"]
+        indexes = [models.Index(fields=["vehicle", "order"])]
+
 
 class Booking(models.Model):
 

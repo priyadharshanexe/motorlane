@@ -4,6 +4,7 @@ from django.utils import timezone
 
 from ..models import Profile, Vehicle
 from ..selectors import active_bookings
+from .photos import add_photo
 
 MAX_ACTIVE_LISTINGS = 3
 
@@ -16,6 +17,7 @@ def create_listing(owner, form):
     vehicle = form.save(commit=False)
     vehicle.owner = owner
     vehicle.save()
+    add_photo(vehicle, form.cleaned_data["vehicle_image"], cover=True)
     return vehicle
 
 

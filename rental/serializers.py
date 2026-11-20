@@ -1,13 +1,44 @@
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Booking, BookingEvent, Vehicle
+from .models import Booking, BookingEvent, Vehicle, VehiclePhoto
 from .selectors import verified_reviews
+
+
+def file_url(request, file):
+    if not file:
+        return None
+    return request.build_absolute_uri(file.url) if request else file.url
+
+
+class PhotoSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField(help_text="Original upload.")
+    small = serializers.SerializerMethodField(help_text="WebP, up to 400 px wide.")
+    large = serializers.SerializerMethodField(help_text="WebP, up to 1200 px wide.")
+
+    def get_url(self, photo) -> str | None:
+        return file_url(self.context.get("request"), photo.image)
+
+    def get_small(self, photo) -> str | None:
+        return file_url(self.context.get("request"), photo.thumb_small or photo.image)
+
+    def get_large(self, photo) -> str | None:
+        return file_url(self.context.get("request"), photo.thumb_large or photo.image)
+
+    class Meta:
+        model = VehiclePhoto
+        fields = ("id", "url", "small", "large", "order", "is_cover")
 
 
 class VehicleSerializer(serializers.ModelSerializer):
     rating = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
+    vehicle_image = serializers.SerializerMethodField(help_text="The cover photo (large WebP thumbnail).")
+    photos = PhotoSerializer(many=True, read_only=True)
+
+    def get_vehicle_image(self, vehicle) -> str | None:
+        cover = vehicle.cover_photo
+        return file_url(self.context.get("request"), cover.thumb_large or cover.image) if cover else None
 
     def get_rating(self, vehicle) -> float | None:
         return self._reviews(vehicle)["average"]
@@ -28,7 +59,7 @@ class VehicleSerializer(serializers.ModelSerializer):
         fields = ("id", "name", "vehicle_type", "fuel_type", "location", "price_per_day", "weekend_price_per_day",
                   "deposit", "vehicle_image",
                   "description", "transmission", "seats", "model_year", "pickup_instructions", "rating",
-                  "review_count")
+                  "review_count", "photos")
 
 
 class FleetVehicleSerializer(VehicleSerializer):

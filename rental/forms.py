@@ -54,13 +54,15 @@ class VehicleForm(forms.ModelForm):
     deposit = forms.DecimalField(max_digits=8, decimal_places=2, required=False,
                                  validators=[MinValueValidator(Decimal("0"))])
 
+    vehicle_image = forms.ImageField(help_text="Becomes the listing's cover photo.")
+
     def clean_deposit(self):
         return self.cleaned_data.get("deposit") or Decimal("0")
 
     class Meta:
         model = Vehicle
         fields = ("name", "vehicle_type", "fuel_type", "location", "price_per_day", "weekend_price_per_day",
-                  "deposit", "vehicle_image",
+                  "deposit",
                   "description", "transmission", "seats", "model_year", "pickup_instructions")
 
     def __init__(self, *args, **kwargs):
@@ -69,13 +71,9 @@ class VehicleForm(forms.ModelForm):
             self.fields["vehicle_image"].required = False
 
     def clean_vehicle_image(self):
+        from .services.photos import validate_upload
         image = self.cleaned_data.get("vehicle_image")
-        if getattr(image, "image", None):
-            if image.size > 5 * 1024 * 1024 or max(image.image.size) > 4096:
-                raise forms.ValidationError("Use an image up to 5 MB and 4096 pixels per side.")
-            if image.image.format not in {"JPEG", "PNG", "WEBP"}:
-                raise forms.ValidationError("Choose a JPEG, PNG, or WebP image.")
-        return image
+        return validate_upload(image) if image else image
 
 
 class ReportDatesForm(forms.Form):
@@ -121,3 +119,12 @@ class SearchForm(forms.Form):
         if low is not None and high is not None and high < low:
             self.add_error("max_price", "The maximum price must be at least the minimum price.")
         return data
+
+
+class PhotoForm(forms.Form):
+    image = forms.ImageField()
+    cover = forms.BooleanField(required=False)
+
+    def clean_image(self):
+        from .services.photos import validate_upload
+        return validate_upload(self.cleaned_data["image"])
