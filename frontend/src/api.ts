@@ -43,6 +43,8 @@ export interface Booking extends DateRange {
   reviewed: boolean
   overdue: boolean
   status_changed_at: string | null
+  payment_required?: boolean
+  payment?: { status: string; amount: string; refunded: string; cancellation_fee: string; provider: string } | null
 }
 export interface Maintenance extends DateRange { id: number; reason: string }
 export interface BookingValue { vehicle_id: number; vehicle__name: string; bookings: number; value: string }

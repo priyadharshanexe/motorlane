@@ -220,6 +220,20 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
                 <>
                   {!id && <Link to={`/bookings/${row.id}`}>View booking</Link>}
                   <a href={`/download-receipt/${row.id}/`}>Booking summary</a>
+                  {row.status === "Confirmed" && row.payment_required &&
+                    !["paid", "partially_refunded", "refunded"].includes(row.payment?.status ?? "") && (
+                    <button
+                      disabled={write.isPending}
+                      onClick={async () => {
+                        // Test-mode checkout: the built-in fake provider stands in for the payment widget.
+                        await write.mutateAsync({ path: `bookings/${row.id}/payment/` });
+                        const result = await write.mutateAsync({ path: `bookings/${row.id}/payment/fake-checkout/` });
+                        write.mutate({ path: `bookings/${row.id}/payment/confirm/`, body: result as Record<string, unknown> });
+                      }}
+                    >
+                      Pay now (test mode)
+                    </button>
+                  )}
                   {(row.status === "Pending" ||
                     (row.status === "Confirmed" && row.start_date > today)) && (
                     <button
