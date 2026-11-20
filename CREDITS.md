@@ -17,7 +17,7 @@ products; no manufacturer affiliation or endorsement is asserted.
 
 ## Third-party vehicle photographs
 
-The nine bundled vehicle photographs have individual authors, source URLs,
+The eighteen bundled vehicle photographs have individual authors, source URLs,
 license links and modification notes in
 [rental/demo_images/CREDITS.md](rental/demo_images/CREDITS.md).
 Retain those attributions and follow each image's license when redistributing it.

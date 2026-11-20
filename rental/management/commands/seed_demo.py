@@ -13,8 +13,16 @@ from django.utils import timezone
 
 from rental.models import Booking, BookingEvent, Profile, Feedback, MaintenanceBlock, Vehicle
 from rental.selectors import active_bookings
+from rental.management.commands.refresh_demo_catalog import cover_matches
 from rental.services.photos import add_photo
 from rental.services.pricing import rental_quote
+
+
+# What each listing above was called in earlier versions of this command (same order).
+PREVIOUS_NAMES = [
+    "Hyundai i20", "Honda Activa", "Suzuki Swift", "Royal Enfield Classic 350", "Hyundai i20",
+    "Honda Activa", "Honda Activa", "Suzuki Swift", "Royal Enfield Classic 350", "Hyundai i20",
+]
 
 
 class Command(BaseCommand):
@@ -44,33 +52,38 @@ class Command(BaseCommand):
             profiles[role], _ = Profile.objects.get_or_create(user=account)
 
         images = Path(__file__).resolve().parents[2] / "demo_images"
+        # Every demo listing is a different model with its own photograph, distinct from the
+        # eight models refresh_demo_catalog adds (test_demo_photos checks this).
         listings = [
-            ("owner", "Hyundai i20", "Car", "Madurai", "1800.00"),
-            ("owner", "Honda Activa", "Bike", "Madurai", "550.00"),
-            ("operator", "Suzuki Swift", "Car", "Tiruchirappalli", "1650.00"),
-            ("operator", "Royal Enfield Classic 350", "Bike", "Coimbatore", "950.00"),
-            ("operator", "Hyundai i20", "Car", "Coimbatore", "2100.00"),
-            ("partner", "Honda Activa", "Bike", "Tiruchirappalli", "590.00"),
-            ("partner", "Honda Activa", "Bike", "Dindigul", "490.00"),
-            ("host", "Suzuki Swift", "Car", "Chennai", "2350.00"),
-            ("host", "Royal Enfield Classic 350", "Bike", "Chennai", "1100.00"),
-            ("host", "Hyundai i20", "Car", "Salem", "1900.00"),
+            ("owner", "Maruti Suzuki Baleno", "Car", "Madurai", "1700.00", "baleno.webp"),
+            ("owner", "Honda Activa", "Bike", "Madurai", "550.00", "demo-bike.webp"),
+            ("operator", "Tata Nexon", "Car", "Tiruchirappalli", "2200.00", "nexon.webp"),
+            ("operator", "Bajaj Pulsar 150", "Bike", "Coimbatore", "800.00", "pulsar-150.webp"),
+            ("operator", "Mahindra XUV300", "Car", "Coimbatore", "2300.00", "xuv300.webp"),
+            ("partner", "TVS Apache RTR 160", "Bike", "Tiruchirappalli", "850.00", "apache-rtr-160.webp"),
+            ("partner", "Royal Enfield Hunter 350", "Bike", "Dindigul", "1000.00", "hunter-350.webp"),
+            ("host", "Maruti Suzuki Dzire", "Car", "Chennai", "1900.00", "dzire.webp"),
+            ("host", "Bajaj Chetak", "Bike", "Chennai", "700.00", "chetak.webp"),
+            ("host", "Tata Punch", "Car", "Salem", "1800.00", "punch.webp"),
         ]
-        photo_names = {
-            "Hyundai i20": "demo-car.webp",
-            "Honda Activa": "demo-bike.webp",
-            "Suzuki Swift": "swift.webp",
-            "Royal Enfield Classic 350": "classic-350.webp",
-        }
         vehicles = []
-        for role, name, kind, location, rate in listings:
+        for (role, name, kind, location, rate, photo), old_name in zip(listings, PREVIOUS_NAMES):
             fleet = Vehicle.objects.filter(owner=profiles[role])
             vehicle = fleet.filter(name=name, location=location).order_by("pk").first()
+            if vehicle is None:
+                # Databases seeded before every listing had its own model: rename in place so
+                # booking history stays attached, then give it the new photo below.
+                vehicle = fleet.filter(name=old_name, location=location).order_by("pk").first()
+                if vehicle is not None:
+                    vehicle.name, vehicle.vehicle_type = name, kind
+                    vehicle.save(update_fields=["name", "vehicle_type"])
             if vehicle is None and fleet.filter(archived_at__isnull=True).count() < 3:
                 vehicle = fleet.create(owner=profiles[role], name=name, location=location, vehicle_type=kind,
                                        fuel_type="Petrol", price_per_day=Decimal(rate))
-                image = images / photo_names[name]
-                add_photo(vehicle, ContentFile(image.read_bytes(), name=image.name), cover=True)
+            if vehicle is not None:
+                data = (images / photo).read_bytes()
+                if not cover_matches(vehicle.cover_photo, data):
+                    add_photo(vehicle, ContentFile(data, name=photo), cover=True)
             vehicles.append(vehicle)
 
         # Keep scenario dates stable even when the command is run on another day.

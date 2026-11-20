@@ -165,7 +165,7 @@ listings with distinct photographs. The command updates its demo records on reru
 Its optional `--archive-existing` flag archives other visible listings while
 preserving booking history. Use a disposable local database for demo setup.
 
-The demo catalog spans four cars and four bikes across Tamil Nadu. Specifications,
+The demo catalog spans eighteen different models across Tamil Nadu, each with its own photograph. Specifications,
 prices and pickup instructions are sample data. Vehicle photographs are real,
 openly licensed Wikimedia Commons images credited in [CREDITS.md](CREDITS.md).
 
