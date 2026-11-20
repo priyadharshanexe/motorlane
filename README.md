@@ -19,6 +19,9 @@ flowchart LR
     Django -->|Session and CSRF validation| Allauth
     Django -->|Booking and fleet transactions| DB[(MySQL)]
     Allauth --> DB
+    Scheduler["Scheduler container"] -->|expire_bookings · send_pickup_reminders| DB
+    Django -->|Emails on commit| Mail["Email backend"]
+    Django <-->|Orders, refunds, signed webhooks| Pay["Fake provider / Razorpay test mode"]
 ```
 
 Vite builds the React application. Django serves the SPA under `/app/` and
@@ -27,10 +30,46 @@ origin. The browser uses Django's HttpOnly session cookie and passes a CSRF
 token for unsafe requests. Google returns through django-allauth's provider
 callback. Django Admin remains available under `/admin/`.
 
-Django calculates inclusive-day quotes and validates final availability on
-submission. MySQL row locks serialize conflicting reservations and concurrent
-listing-cap checks. A pending request holds its dates for up to 24 hours.
+The backend is layered: `rental/api.py` only parses requests and serializes
+responses; business rules live in `rental/services/` (booking, pricing,
+availability, payments in `rental/payments/`, notifications, expiry, photos,
+listing, maintenance), read queries in `rental/selectors.py`, and access scoping
+in `rental/permissions.py` (rows another account owns answer 404).
+
+Django prices every rental server-side and validates final availability on
+submission. Bookings have pickup and return times; a configurable cleaning
+buffer (`RENTAL_TURNAROUND_MINUTES`, default 120) separates rentals and
+maintenance. MySQL row locks serialize conflicting reservations, maintenance
+and listing-cap checks. A pending request holds its dates for up to 24 hours.
 Vehicle archiving preserves booking history.
+
+Pricing: weekend rate for Saturdays and Sundays when set, 10% off 7+ days and
+20% off 30+ days, and a refundable deposit shown as its own line. The quote is
+returned line by line and stored on the booking.
+
+Payments (test only): after approval the renter pays rental plus deposit
+through the built-in fake provider, or Razorpay when `rzp_test_` keys are set
+(live keys are refused). Pickup needs a completed payment. Cancelling at least
+48 hours before pickup refunds everything; later, 20% of the rental is kept and
+the deposit is returned. The deposit is refunded at return. Webhooks are
+verified by HMAC signature and each provider event id is applied once.
+
+### Data model
+
+| Model | Purpose |
+| --- | --- |
+| `Profile` | Marketplace details (phone) for an auth user; name and email live on the user |
+| `Vehicle`, `VehiclePhoto` | Listings with weekday/weekend rates and deposit; up to eight photos, one cover, WebP thumbnails at 400 and 1200 px |
+| `Booking` | Dates and times, status (Pending, Confirmed, Rejected, Expired, Cancelled, In progress, Returned), stored price breakdown |
+| `BookingEvent` | Append-only timeline: every creation, transition and expiry with actor and note |
+| `MaintenanceBlock` | Whole-day unavailability set by the owner |
+| `Feedback` | One verified review per returned booking, rating 1 to 5 (database constraints) |
+| `Payment`, `Refund`, `WebhookEvent` | Charge, refunds and processed provider event ids |
+| `Favorite` | Saved vehicles |
+
+Emails (text and HTML, sent after commit): new request to the owner; approved,
+rejected and cancelled to the renter; a pickup reminder the day before; return
+received and a review request.
 
 ## Run locally
 
@@ -99,7 +138,18 @@ configured. Register the callback at
 | `GET, POST /api/v1/owner/fleet/` | Owner listings and multipart creation |
 | `PATCH, DELETE /api/v1/owner/fleet/{id}/` | Update, publish, unpublish, or archive a listing |
 | `/api/v1/owner/fleet/{id}/maintenance/` | List or create maintenance blocks, with deletion by block ID |
+| `GET /api/v1/bookings/{id}/` and `/timeline/` | Booking with its audit timeline (renter or owner) |
+| `GET /api/v1/bookings/{id}/cancellation/` | Fee and refund if cancelled now |
+| `POST /api/v1/bookings/{id}/payment/` and `/payment/confirm/` | Open checkout and confirm a signed result |
+| `POST /api/v1/payments/webhook/` | Provider webhook (signature verified, idempotent) |
+| `/api/v1/owner/fleet/{id}/photos/` | Upload, reorder, set cover or delete photos |
 | `/auth/browser/v1/` | django-allauth browser authentication and account APIs |
+| `GET /healthz`, `GET /readyz` | Liveness, and readiness (database and migrations) |
+
+The full OpenAPI schema is at `/api/schema`, with interactive docs at
+`/api/docs`. Catalog search accepts `location` (comma-separated places),
+`min_price`, `max_price`, `sort` (`price`, `-price`, `rating`, `newest`),
+dates and `pickup_time`/`return_time`.
 
 ## Demo and tests
 
@@ -111,22 +161,32 @@ with the password exported in your shell.
 The seed creates renter and owner accounts at `rental-demo.example`, with
 upcoming, active and historical bookings. After seeding, run
 `python manage.py refresh_demo_catalog` to populate eight complete illustrative
-listings with distinct images. The command updates its demo records on reruns.
+listings with distinct photographs. The command updates its demo records on reruns.
 Its optional `--archive-existing` flag archives other visible listings while
 preserving booking history. Use a disposable local database for demo setup.
 
 The demo catalog spans four cars and four bikes across Tamil Nadu. Specifications,
-prices and pickup instructions are sample data. Generated vehicle images are
-identified in listing descriptions and the [asset credits](CREDITS.md).
+prices and pickup instructions are sample data. Vehicle photographs are real,
+openly licensed Wikimedia Commons images credited in [CREDITS.md](CREDITS.md).
 
 Run `python manage.py test`, `npm --prefix frontend test`,
 `npm --prefix frontend run lint`, and `npm --prefix frontend run build`.
-CI runs the Django suite on MySQL and checks the TypeScript application.
+The Django suite (100+ tests) covers every status transition and permission,
+pricing, expiry, notifications, payments and duplicate webhooks, concurrency
+on MySQL, and a full rental through the API. CI runs settings checks,
+migration checks (forward and reverse), OpenAPI validation and the suite on
+MySQL, builds the Docker image and probes the running stack, and checks the
+TypeScript application.
+
+Production settings: HSTS for one year with preload, a Content-Security-Policy
+with per-request script nonces, JSON log lines (`DJANGO_LOG_FORMAT`), pooled
+database connections (`DJANGO_CONN_MAX_AGE`), and `manage.py check` validation
+of rental and payment settings.
 
 [Catalog](docs/screenshots/catalog.jpg) · [Booking details](docs/screenshots/booking.jpg) · [Owner workspace](docs/screenshots/owner.jpg) · [Demo photo credits](rental/demo_images/CREDITS.md)
 
 ## License
 
 Application code and project documentation use the [MIT license](LICENSE).
-Bundled photographs retain their original licenses. See [all image and AI asset credits](CREDITS.md)
+Bundled photographs retain their original licenses. See [all image credits](CREDITS.md)
 and the [demo photograph attributions](rental/demo_images/CREDITS.md) for file-level details.
