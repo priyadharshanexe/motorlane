@@ -9,10 +9,13 @@ in LICENSE. Codex assisted with implementation, design and verification.
 
 ## Vehicle photographs
 
-Every vehicle image in the application, including the homepage hero and the
-sign-in illustration, is a real photograph from Wikimedia Commons under a
-licence that allows reuse. The AI-generated renders used earlier were removed
-on 20 November 2026. Vehicle names, logos and marks identify the depicted
+Every vehicle image in the catalog and on the sign-in page is a real photograph
+from Wikimedia Commons under a licence that allows reuse. The AI-generated
+catalog renders were removed on 20 November 2026.
+
+The homepage hero, `frontend/src/assets/studio-commuter.webp`, is the one
+exception: an unbranded commuter motorcycle generated with the built-in OpenAI
+imagegen tool on 18 November 2026 and encoded as transparent WebP at quality 85. Vehicle names, logos and marks identify the depicted
 products; no manufacturer affiliation or endorsement is asserted.
 
 ## Third-party vehicle photographs
