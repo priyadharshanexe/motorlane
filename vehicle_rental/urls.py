@@ -15,6 +15,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from django.urls import path, include, re_path
 from rental.views import react_app
 from django.views.generic import RedirectView
@@ -29,6 +30,8 @@ urlpatterns = [
     path('auth/', include('allauth.headless.urls')),
     re_path(r'^app(?:/.*)?$', react_app, name='react_app'),
     path('api/v1/', include('rental.api_urls')),
+    path('api/schema', SpectacularAPIView.as_view(), name='api_schema'),
+    path('api/docs', SpectacularSwaggerView.as_view(url_name='api_schema'), name='api_docs'),
     path('', include('rental.urls')),
 ]
 

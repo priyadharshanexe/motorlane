@@ -16,6 +16,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
+from . import schema
 from .forms import BookingDatesForm, FeedbackForm, MaintenanceForm, PhotoForm, ReportDatesForm, VehicleForm
 from .models import Booking, Favorite, Feedback, Vehicle
 from .permissions import (
@@ -46,6 +47,7 @@ def conflict(error):
 
 
 @never_cache
+@schema.session
 @api_view(["GET"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(PUBLIC)
@@ -63,6 +65,7 @@ class CatalogPagination(PageNumberPagination):
     page_size = 12
 
 
+@schema.vehicle_list
 class VehicleList(generics.ListAPIView):
     pagination_class = CatalogPagination
     authentication_classes = SESSION_AUTH
@@ -79,6 +82,8 @@ class VehicleList(generics.ListAPIView):
 
 
 @never_cache
+@schema.bookings_list
+@schema.bookings_create
 @api_view(["GET", "POST"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -120,6 +125,7 @@ def bookings(request):
     return Response(BookingSerializer(booking, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
 
+@schema.vehicle_detail
 class VehicleDetail(generics.RetrieveAPIView):
     authentication_classes = SESSION_AUTH
     permission_classes = PUBLIC
@@ -140,6 +146,7 @@ class VehicleDetail(generics.RetrieveAPIView):
         })
 
 
+@schema.owner_bookings
 class OwnerBookings(generics.ListAPIView):
     authentication_classes = SESSION_AUTH
     permission_classes = SIGNED_IN
@@ -160,6 +167,7 @@ def visible_booking(user, pk):
 
 
 @never_cache
+@schema.booking_detail
 @api_view(["GET"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -169,6 +177,7 @@ def booking_detail(request, pk):
 
 
 @never_cache
+@schema.booking_timeline
 @api_view(["GET"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -190,6 +199,7 @@ BOOKING_ACTIONS = {
 }
 
 
+@schema.booking_action
 @api_view(["POST"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -204,6 +214,7 @@ def booking_action(request, pk, action):
     return Response(BookingSerializer(booking, context={"request": request}).data)
 
 
+@schema.fleet
 @api_view(["GET", "POST"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -222,6 +233,7 @@ def fleet(request):
     return Response(FleetVehicleSerializer(vehicle, context={"request": request}).data, status=201)
 
 
+@schema.fleet_vehicle
 @api_view(["PATCH", "DELETE"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -254,19 +266,17 @@ def fleet_vehicle(request, pk):
     return Response(FleetVehicleSerializer(vehicle, context={"request": request}).data)
 
 
-@api_view(["GET", "POST", "DELETE"])
+@schema.maintenance_list
+@api_view(["GET", "POST"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
 @transaction.atomic
-def maintenance(request, pk, block_id=None):
+def maintenance(request, pk):
     vehicles = owned_vehicles(request.user)
     if request.method != "GET":
         vehicles = vehicles.select_for_update()
     vehicle = get_object_or_404(vehicles, pk=pk, archived_at__isnull=True)
     blocks = vehicle.maintenance_blocks.order_by("start_date", "pk")
-    if request.method == "DELETE":
-        get_object_or_404(blocks, pk=block_id).delete()
-        return Response(status=204)
     if request.method == "GET":
         return Response(list(blocks.values("id", "start_date", "end_date", "reason")))
     form = MaintenanceForm(request.data)
@@ -279,6 +289,18 @@ def maintenance(request, pk, block_id=None):
     return Response({"id": block.pk, **form.cleaned_data}, status=201)
 
 
+@schema.maintenance_block
+@api_view(["DELETE"])
+@authentication_classes(SESSION_AUTH)
+@permission_classes(SIGNED_IN)
+@transaction.atomic
+def maintenance_block(request, pk, block_id):
+    vehicle = get_object_or_404(owned_vehicles(request.user).select_for_update(), pk=pk, archived_at__isnull=True)
+    get_object_or_404(vehicle.maintenance_blocks, pk=block_id).delete()
+    return Response(status=204)
+
+
+@schema.booking_values
 @api_view(["GET"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -292,6 +314,7 @@ def booking_values(request):
     return Response(rows)
 
 
+@schema.review
 @api_view(["POST"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -309,6 +332,7 @@ def review(request, pk):
     return Response(status=201)
 
 
+@schema.quote
 @api_view(["GET"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(PUBLIC)
@@ -324,13 +348,20 @@ def quote(request, pk):
     return Response(quote.as_dict())
 
 
-@api_view(["GET", "POST", "DELETE"])
+@schema.favorites_list
+@api_view(["GET"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
-def favorites(request, pk=None):
-    if request.method == "GET":
-        rows = listed_vehicles().filter(favorite__user=request.user)
-        return Response(VehicleSerializer(rows, many=True, context={"request": request}).data)
+def favorites(request):
+    rows = listed_vehicles().filter(favorite__user=request.user).prefetch_related("photos")
+    return Response(VehicleSerializer(rows, many=True, context={"request": request}).data)
+
+
+@schema.favorite
+@api_view(["POST", "DELETE"])
+@authentication_classes(SESSION_AUTH)
+@permission_classes(SIGNED_IN)
+def favorite(request, pk):
     vehicle = get_object_or_404(listed_vehicles(), pk=pk)
     if request.method == "DELETE":
         Favorite.objects.filter(user=request.user, vehicle=vehicle).delete()
@@ -345,6 +376,7 @@ def renter_booking_locked(user, pk):
     return get_object_or_404(renter_bookings(user).select_for_update(), pk=pk)
 
 
+@schema.payment_start
 @api_view(["POST"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -367,6 +399,7 @@ class CheckoutResultSerializer(serializers.Serializer):
     signature = serializers.CharField(max_length=128)
 
 
+@schema.payment_confirm
 @api_view(["POST"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -384,6 +417,7 @@ def payment_confirm(request, pk):
     return Response({"status": payment.status, "amount": str(payment.amount)})
 
 
+@schema.payment_fake_checkout
 @api_view(["POST"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -401,6 +435,7 @@ def payment_fake_checkout(request, pk):
 
 
 @never_cache
+@schema.cancellation_preview
 @api_view(["GET"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -416,6 +451,7 @@ def cancellation_preview(request, pk):
                      "fee_percent": settings.RENTAL_CANCELLATION_FEE_PERCENT})
 
 
+@schema.payment_webhook
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes(PUBLIC)
@@ -434,6 +470,7 @@ def payment_webhook(request):
 
 # Photos -----------------------------------------------------------------------------------
 
+@schema.fleet_photos
 @api_view(["GET", "POST"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -452,6 +489,7 @@ def fleet_photos(request, pk):
     return Response(PhotoSerializer(photo, context={"request": request}).data, status=201)
 
 
+@schema.fleet_photo
 @api_view(["PATCH", "DELETE"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
@@ -470,6 +508,7 @@ def fleet_photo(request, pk, photo_id):
     return Response(PhotoSerializer(vehicle.photos.get(pk=photo_id), context={"request": request}).data)
 
 
+@schema.fleet_photo_order
 @api_view(["POST"])
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)

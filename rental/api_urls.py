@@ -3,8 +3,8 @@ from django.urls import path
 from . import api
 
 urlpatterns = [
-    path("favorites/", api.favorites),
-    path("favorites/<int:pk>/", api.favorites),
+    path("favorites/", api.favorites, name="api_favorites"),
+    path("favorites/<int:pk>/", api.favorite, name="api_favorite"),
     path("session/", api.session, name="api_session"),
     path("vehicles/", api.VehicleList.as_view(), name="api_vehicle_list"),
     path("vehicles/<int:pk>/quote/", api.quote, name="api_quote"),
@@ -16,7 +16,7 @@ urlpatterns = [
     path("owner/fleet/<int:pk>/photos/order/", api.fleet_photo_order, name="api_fleet_photo_order"),
     path("owner/fleet/<int:pk>/photos/<int:photo_id>/", api.fleet_photo, name="api_fleet_photo"),
     path("owner/fleet/<int:pk>/maintenance/", api.maintenance, name="api_maintenance"),
-    path("owner/fleet/<int:pk>/maintenance/<int:block_id>/", api.maintenance, name="api_maintenance_block"),
+    path("owner/fleet/<int:pk>/maintenance/<int:block_id>/", api.maintenance_block, name="api_maintenance_block"),
     path("owner/value/", api.booking_values, name="api_booking_values"),
     path("bookings/<int:pk>/", api.booking_detail, name="api_booking_detail"),
     path("bookings/<int:pk>/timeline/", api.booking_timeline, name="api_booking_timeline"),

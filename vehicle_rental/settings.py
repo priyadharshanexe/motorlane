@@ -36,6 +36,8 @@ ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split("
 
 INSTALLED_APPS = [
     "rest_framework",
+    "drf_spectacular",
+    "drf_spectacular_sidecar",
     "allauth",
     "allauth.account",
     "allauth.headless",
@@ -208,3 +210,21 @@ RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
 PAYMENT_WEBHOOK_SECRET = os.getenv("PAYMENT_WEBHOOK_SECRET", "")
 PAYMENT_CURRENCY = "INR"
 SITE_URL = os.getenv("SITE_URL", "http://localhost:8000")
+
+REST_FRAMEWORK = {"DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema"}
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Motorlane API",
+    "DESCRIPTION": (
+        "Car and bike rental marketplace. Browser clients authenticate with the session cookie "
+        "set by the headless allauth endpoints under /auth/browser/v1/, and send the CSRF token "
+        "from GET /api/v1/session/ in the X-CSRFToken header on every unsafe request. "
+        "Prices are in INR. Rows another account owns are reported as 404, never 403."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SCHEMA_PATH_PREFIX": r"/api/v1",
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "REDOC_DIST": "SIDECAR",
+}
