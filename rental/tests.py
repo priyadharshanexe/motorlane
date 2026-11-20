@@ -5,15 +5,16 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Booking, CustomUser, Vehicle
+from .models import Booking, Vehicle
+from .testing import make_profile
 
 
 CHECKOUT = {"contact_name": "Test renter", "contact_phone": "+91 99999 00000", "accepted_conditions": True}
 @override_settings(SECURE_SSL_REDIRECT=False)
 class BookingPermissionsTests(TestCase):
     def setUp(self):
-        self.owner = CustomUser.objects.create(email="owner@example.com", name="Owner")
-        self.renter = CustomUser.objects.create(email="renter@example.com", name="Renter")
+        self.owner = make_profile("owner", name="Owner")
+        self.renter = make_profile("renter", name="Renter")
         vehicle = Vehicle.objects.create(
             owner=self.owner, name="Car", vehicle_type="Car", price_per_day=100
         )
@@ -23,12 +24,7 @@ class BookingPermissionsTests(TestCase):
         )
 
     def sign_in(self, user):
-        account = get_user_model().objects.create_user(
-            username=user.email, email=user.email,
-        ) if user.account_id is None else user.account
-        user.account = account
-        user.save(update_fields=["account"])
-        self.client.force_login(account)
+        self.client.force_login(user.user)
 
     def test_missed_confirmed_rental_expires_for_renter_and_owner(self):
         yesterday = timezone.localdate() - timedelta(days=1)

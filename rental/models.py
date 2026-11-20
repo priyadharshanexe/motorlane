@@ -3,17 +3,22 @@ from django.db import models
 from django.utils import timezone
 
 
-class CustomUser(models.Model):
-    name = models.CharField(max_length=100)
-    email = models.EmailField()
-    phone = models.CharField(max_length=15)
-    account = models.OneToOneField(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="rental_profile",
-        null=True, blank=True,
-    )
+class Profile(models.Model):
+    """Marketplace details for an auth user. Name and email live on the auth user only."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="profile")
+    phone = models.CharField(max_length=15, blank=True)
+
+    @property
+    def name(self):
+        return (self.user.get_full_name() or self.user.email or self.user.username)[:100]
+
+    @property
+    def email(self):
+        return self.user.email
 
     def __str__(self):
-        return self.email
+        return self.name
 
 class Vehicle(models.Model):
 
@@ -22,7 +27,7 @@ class Vehicle(models.Model):
         ('Car', 'Car'),
     ]
 
-    owner = models.ForeignKey(CustomUser, on_delete=models.CASCADE, null=True, blank=True)
+    owner = models.ForeignKey(Profile, on_delete=models.CASCADE, null=True, blank=True)
 
     name = models.CharField(max_length=100)
     vehicle_type = models.CharField(max_length=10, choices=VEHICLE_TYPE_CHOICES)
@@ -58,7 +63,7 @@ class Booking(models.Model):
         IN_PROGRESS = "In progress"
         RETURNED = "Returned"
 
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    user = models.ForeignKey(Profile, on_delete=models.CASCADE)
     vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT)
     start_date = models.DateField()
     end_date = models.DateField()
@@ -154,7 +159,7 @@ class MaintenanceBlock(models.Model):
 class Feedback(models.Model):
     # One verified review per completed booking: the one-to-one makes the booking unique.
     booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name="review")
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    user = models.ForeignKey(Profile, on_delete=models.CASCADE)
     vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE)
     rating = models.IntegerField()
     comment = models.TextField()

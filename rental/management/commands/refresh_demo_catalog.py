@@ -6,7 +6,7 @@ from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
-from rental.models import Vehicle, CustomUser
+from rental.models import Vehicle, Profile
 
 CATALOG = [
     ("Hyundai i20", "Car", "Madurai", "1800", "Manual", 5, 2018, "demo-car.webp",
@@ -36,7 +36,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if not settings.DEBUG:
             raise CommandError("This catalog reset is for local development only.")
-        owner = CustomUser.objects.get(account__username="rental-demo-owner")
+        owner = Profile.objects.get(user__username="rental-demo-owner")
         root = Path(__file__).resolve().parents[2] / "demo_images"
         # Validate every image before changing database state.
         images = {row[7]: (root / row[7]).read_bytes() for row in CATALOG}

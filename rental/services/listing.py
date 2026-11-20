@@ -2,7 +2,7 @@ from django import forms
 from django.db import transaction
 from django.utils import timezone
 
-from ..models import CustomUser, Vehicle
+from ..models import Profile, Vehicle
 from ..selectors import active_bookings
 
 MAX_ACTIVE_LISTINGS = 3
@@ -10,7 +10,7 @@ MAX_ACTIVE_LISTINGS = 3
 
 @transaction.atomic
 def create_listing(owner, form):
-    CustomUser.objects.select_for_update().get(pk=owner.pk)
+    Profile.objects.select_for_update().get(pk=owner.pk)
     if Vehicle.objects.filter(owner=owner, archived_at__isnull=True).count() >= MAX_ACTIVE_LISTINGS:
         raise forms.ValidationError("You can list up to three vehicles at a time.")
     vehicle = form.save(commit=False)

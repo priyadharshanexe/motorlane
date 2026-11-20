@@ -1,12 +1,7 @@
-from ..models import CustomUser
+from ..models import Profile
 
 
 def rental_profile(user):
-    profile, _ = CustomUser.objects.get_or_create(
-        account=user,
-        defaults={
-            "email": user.email or f"account-{user.pk}@invalid.invalid",
-            "name": (user.get_full_name() or user.email or user.username)[:100],
-        },
-    )
+    """The marketplace profile for an auth user, created on first use."""
+    profile, _ = Profile.objects.get_or_create(user=user)
     return profile

@@ -7,16 +7,17 @@ from django.db import close_old_connections, connections
 from django.test import TransactionTestCase, skipUnlessDBFeature
 from django.utils import timezone
 
-from .models import Booking, CustomUser, Vehicle
+from .models import Booking, Profile, Vehicle
+from .testing import make_profile
 from .services.booking import reserve_vehicle
 
 
 class ReservationConcurrencyTests(TransactionTestCase):
     @skipUnlessDBFeature("has_select_for_update")
     def test_concurrent_requests_leave_one_reservation(self):
-        owner = CustomUser.objects.create(email="owner@example.com", name="Owner")
+        owner = make_profile("owner")
         renters = [
-            CustomUser.objects.create(email=f"renter{i}@example.com", name=f"Renter {i}")
+            make_profile(f"renter{i}")
             for i in range(2)
         ]
         vehicle = Vehicle.objects.create(
@@ -28,7 +29,7 @@ class ReservationConcurrencyTests(TransactionTestCase):
 
     @skipUnlessDBFeature("has_select_for_update")
     def test_concurrent_requests_respect_renter_limit(self):
-        renter = CustomUser.objects.create(email="renter@example.com", name="Renter")
+        renter = make_profile("renter")
         vehicles = [Vehicle.objects.create(name=f"Car {i}", vehicle_type="Car", price_per_day=100)
                     for i in range(4)]
         today = timezone.localdate()
@@ -69,7 +70,7 @@ class ReservationConcurrencyTests(TransactionTestCase):
         from PIL import Image
 
         account = get_user_model().objects.create_user(username="listing-owner")
-        owner = CustomUser.objects.create(account=account, name="Owner", email="owner@example.com")
+        owner = Profile.objects.create(user=account)
         for name in ("Existing car", "Existing bike"):
             Vehicle.objects.create(owner=owner, name=name, vehicle_type="Car", price_per_day=100)
         barrier = Barrier(2)

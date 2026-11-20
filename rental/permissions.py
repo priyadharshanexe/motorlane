@@ -15,14 +15,14 @@ SIGNED_IN = [IsAuthenticated]
 
 def owned_vehicles(user):
     """Vehicles listed by this account."""
-    return Vehicle.objects.filter(owner__account=user)
+    return Vehicle.objects.filter(owner__user=user)
 
 
 def renter_bookings(user):
     """Bookings this account requested."""
-    return Booking.objects.filter(user__account=user)
+    return Booking.objects.filter(user__user=user)
 
 
 def owner_bookings(user):
     """Bookings for vehicles this account lists."""
-    return Booking.objects.filter(vehicle__owner__account=user)
+    return Booking.objects.filter(vehicle__owner__user=user)

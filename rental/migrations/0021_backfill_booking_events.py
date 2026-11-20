@@ -28,7 +28,8 @@ def backfill(apps, schema_editor):
     events = []
     bookings = Booking.objects.using(alias).select_related("user").filter(events__isnull=True)
     for booking in bookings.iterator():
-        created = request_time(booking)
+        later = [t for t in (booking.status_changed_at, booking.picked_up_at, booking.returned_at) if t]
+        created = min([request_time(booking), *later])
         renter = booking.user.account_id
         owner_change = booking.status_changed_by_id
         steps = [("", "Pending", renter, created)]

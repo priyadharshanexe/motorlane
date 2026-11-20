@@ -6,7 +6,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from ..models import Booking, CustomUser, MaintenanceBlock, Vehicle
+from ..models import Booking, Profile, MaintenanceBlock, Vehicle
 from ..selectors import active_bookings
 from .events import record_event
 from .pricing import rental_quote
@@ -20,7 +20,7 @@ REQUEST_RESPONSE_HOURS = 24
 @transaction.atomic
 def reserve_vehicle(user_id, vehicle_id, start_date, end_date):
     # Lock in a consistent order so requests serialize per renter and vehicle.
-    CustomUser.objects.select_for_update().get(pk=user_id)
+    Profile.objects.select_for_update().get(pk=user_id)
     vehicle = get_object_or_404(Vehicle.objects.select_for_update(), pk=vehicle_id)
     active = active_bookings()
     if end_date < start_date or start_date < timezone.localdate():
@@ -41,7 +41,7 @@ def reserve_vehicle(user_id, vehicle_id, start_date, end_date):
         total_price=total_price, quoted_daily_rate=vehicle.price_per_day,
         expires_at=timezone.now() + timedelta(hours=REQUEST_RESPONSE_HOURS),
     )
-    record_event(booking, "", Booking.Status.PENDING, actor=booking.user.account, note="Rental requested.")
+    record_event(booking, "", Booking.Status.PENDING, actor=booking.user.user, note="Rental requested.")
     return booking
 
 

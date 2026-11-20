@@ -1,8 +1,8 @@
 from django.contrib import admin
 
-from .models import Booking, BookingEvent, CustomUser, Vehicle
+from .models import Booking, BookingEvent, Profile, Vehicle
 
-admin.site.register(CustomUser)
+admin.site.register(Profile)
 admin.site.register(Vehicle)
 
 

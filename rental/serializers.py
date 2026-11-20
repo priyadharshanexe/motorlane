@@ -75,9 +75,9 @@ class BookingEventSerializer(serializers.ModelSerializer):
         if event.actor_id is None:
             return "system"
         booking = event.booking
-        if event.actor_id == booking.user.account_id:
+        if event.actor_id == booking.user.user_id:
             return "renter"
-        if booking.vehicle.owner and event.actor_id == booking.vehicle.owner.account_id:
+        if booking.vehicle.owner and event.actor_id == booking.vehicle.owner.user_id:
             return "owner"
         return "staff"
 

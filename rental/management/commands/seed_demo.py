@@ -11,7 +11,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from rental.models import Booking, BookingEvent, CustomUser, Feedback, MaintenanceBlock, Vehicle
+from rental.models import Booking, BookingEvent, Profile, Feedback, MaintenanceBlock, Vehicle
 from rental.selectors import active_bookings
 from rental.services.pricing import rental_quote
 
@@ -30,7 +30,7 @@ class Command(BaseCommand):
             username = f"rental-demo-{role}"
             email = f"{role}@rental-demo.example"
             account, created = get_user_model().objects.get_or_create(
-                username=username, defaults={"email": email, "first_name": role.title()},
+                username=username, defaults={"email": email, "first_name": "Demo", "last_name": role.title()},
             )
             if not created and account.email != email:
                 raise CommandError(f"The demo username {username} is already in use.")
@@ -40,9 +40,7 @@ class Command(BaseCommand):
             EmailAddress.objects.get_or_create(
                 user=account, email=email, defaults={"primary": True, "verified": True},
             )
-            profiles[role], _ = CustomUser.objects.get_or_create(
-                account=account, defaults={"name": f"Demo {role.title()}", "email": email},
-            )
+            profiles[role], _ = Profile.objects.get_or_create(user=account)
 
         images = Path(__file__).resolve().parents[2] / "demo_images"
         listings = [
@@ -75,7 +73,7 @@ class Command(BaseCommand):
             vehicles.append(vehicle)
 
         # Keep scenario dates stable even when the command is run on another day.
-        seeded_at = profiles["operator"].account.date_joined
+        seeded_at = profiles["operator"].user.date_joined
         today = timezone.localdate(seeded_at)
         renter = profiles["renter"]
         status = Booking.Status
@@ -119,21 +117,21 @@ class Command(BaseCommand):
                 quoted_daily_rate=vehicle.price_per_day, total_price=total, status=state,
                 expires_at=seeded_at + timedelta(hours=24) if state == status.PENDING else None,
                 status_changed_at=changed,
-                status_changed_by=(renter.account if state == status.CANCELLED else vehicle.owner.account) if changed else None,
+                status_changed_by=(renter.user if state == status.CANCELLED else vehicle.owner.user) if changed else None,
                 picked_up_at=pickup if state in (status.IN_PROGRESS, status.RETURNED) else None,
                 returned_at=handback if state == status.RETURNED else None,
             )
             requested = min(seeded_at - timedelta(hours=1), pickup - timedelta(days=3))
             booking.created_at = requested
             booking.save(update_fields=["created_at"])
-            steps = [("", status.PENDING, renter.account, requested)]
+            steps = [("", status.PENDING, renter.user, requested)]
             if state in (status.CONFIRMED, status.IN_PROGRESS, status.RETURNED):
-                steps.append((status.PENDING, status.CONFIRMED, vehicle.owner.account,
+                steps.append((status.PENDING, status.CONFIRMED, vehicle.owner.user,
                               seeded_at if state == status.CONFIRMED else requested + timedelta(hours=2)))
             if state in (status.IN_PROGRESS, status.RETURNED):
-                steps.append((status.CONFIRMED, status.IN_PROGRESS, vehicle.owner.account, pickup))
+                steps.append((status.CONFIRMED, status.IN_PROGRESS, vehicle.owner.user, pickup))
             if state == status.RETURNED:
-                steps.append((status.IN_PROGRESS, status.RETURNED, vehicle.owner.account, handback))
+                steps.append((status.IN_PROGRESS, status.RETURNED, vehicle.owner.user, handback))
             if state in (status.CANCELLED, status.REJECTED):
                 steps.append((status.PENDING, state, booking.status_changed_by, changed))
             BookingEvent.objects.bulk_create(

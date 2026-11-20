@@ -7,14 +7,11 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Booking, BookingEvent, CustomUser, Vehicle
+from .models import Booking, BookingEvent, Vehicle
+from .testing import make_profile
 from .services.booking import reserve_vehicle
 from .services.expiry import NO_SHOW, PICKUP_DATE_PASSED, REQUEST_TIMED_OUT, expire_bookings
 
-
-def make_profile(username):
-    account = get_user_model().objects.create_user(username=username, email=f"{username}@example.com")
-    return CustomUser.objects.create(account=account, name=username.title(), email=account.email)
 
 
 class ExpiryTests(TestCase):
@@ -75,7 +72,7 @@ class TimelineTests(TestCase):
     def test_every_transition_is_recorded_and_visible_to_both_parties_only(self):
         today = timezone.localdate()
         booking = reserve_vehicle(self.renter.pk, self.vehicle.pk, today, today)
-        self.client.force_login(self.owner.account)
+        self.client.force_login(self.owner.user)
         for action in ("approve", "pickup", "return"):
             url = reverse("api_booking_action", args=[booking.pk, action])
             self.assertEqual(self.client.post(url, secure=True).status_code, 200)
@@ -84,16 +81,16 @@ class TimelineTests(TestCase):
             ("", "Pending", "renter"), ("Pending", "Confirmed", "owner"),
             ("Confirmed", "In progress", "owner"), ("In progress", "Returned", "owner"),
         ])
-        self.client.force_login(self.renter.account)
+        self.client.force_login(self.renter.user)
         detail = self.client.get(reverse("api_booking_detail", args=[booking.pk]), secure=True).json()
         self.assertEqual(len(detail["timeline"]), 4)
-        self.client.force_login(self.stranger.account)
+        self.client.force_login(self.stranger.user)
         self.assertEqual(self.client.get(reverse("api_booking_timeline", args=[booking.pk]), secure=True).status_code, 404)
 
     def test_failed_transition_records_nothing(self):
         today = timezone.localdate()
         booking = reserve_vehicle(self.renter.pk, self.vehicle.pk, today, today)
-        self.client.force_login(self.owner.account)
+        self.client.force_login(self.owner.user)
         self.assertEqual(self.client.post(reverse("api_booking_action", args=[booking.pk, "return"]), secure=True).status_code, 409)
         self.assertEqual(booking.events.count(), 1)
 

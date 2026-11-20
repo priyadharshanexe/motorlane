@@ -84,7 +84,7 @@ class VehicleList(generics.ListAPIView):
 def bookings(request):
     profile = rental_profile(request.user)
     if request.method == "GET":
-        rows = Booking.objects.filter(user=profile).select_related("vehicle", "user", "review").order_by(
+        rows = Booking.objects.filter(user=profile).select_related("vehicle", "user__user", "review").order_by(
             "-start_date", "-pk")
         return Response(BookingSerializer(rows, many=True, context={"request": request}).data)
     throttle = BookingCreationThrottle()
@@ -145,15 +145,15 @@ class OwnerBookings(generics.ListAPIView):
     serializer_class = BookingSerializer
 
     def get_queryset(self):
-        return owner_bookings(self.request.user).select_related("vehicle", "user", "review").order_by("start_date", "pk")
+        return owner_bookings(self.request.user).select_related("vehicle", "user__user", "review").order_by("start_date", "pk")
 
 
 def visible_booking(user, pk):
     """A booking the account rented or whose vehicle it owns; anything else is a 404."""
     from django.db.models import Q
     return get_object_or_404(
-        Booking.objects.filter(Q(user__account=user) | Q(vehicle__owner__account=user))
-        .select_related("vehicle", "user", "review").select_related("vehicle__owner").prefetch_related("events"),
+        Booking.objects.filter(Q(user__user=user) | Q(vehicle__owner__user=user))
+        .select_related("vehicle", "user__user", "review").select_related("vehicle__owner").prefetch_related("events"),
         pk=pk,
     )
 
