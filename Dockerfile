@@ -22,6 +22,7 @@ COPY --from=wheels /wheels /wheels
 COPY requirements.txt .
 RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt && rm -rf /wheels
 COPY manage.py .
+COPY docker/scheduler.sh docker/scheduler.sh
 COPY rental rental
 COPY templates templates
 COPY vehicle_rental vehicle_rental

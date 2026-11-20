@@ -38,6 +38,23 @@ services:
     volumes:
       - media-data:/app/media
 
+  scheduler:
+    # Periodic jobs (booking expiry, pickup reminders). Same image as web, no ports.
+    profiles: ["app"]
+    build: .
+    command: ["sh", "docker/scheduler.sh"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS:-300}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   mysql-data:
   media-data:
