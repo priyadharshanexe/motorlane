@@ -17,16 +17,27 @@ CATALOG = [
     ("Royal Enfield Classic 350", "Bike", "Coimbatore", "950", "Manual", 2, 2019, "classic-350.webp",
      "A classic-style motorcycle for relaxed rides and exploring local roads."),
     ("Hero Honda Splendor", "Bike", "Madurai", "500", "Manual", 2, 2005, "splendor.webp",
-     "A lightweight commuter motorcycle for getting around town. Image is an illustrative studio render."),
+     "A lightweight commuter motorcycle for getting around town."),
     ("Honda City", "Car", "Chennai", "2600", "Automatic", 5, 2022, "honda-city.webp",
-     "A comfortable sedan for city journeys and longer weekend drives. White exterior with a spacious five-seat cabin. Image is an illustrative studio render."),
+     "A comfortable sedan for city journeys and longer weekend drives. Grey exterior with a spacious five-seat cabin."),
     ("Hyundai Venue", "Car", "Coimbatore", "2400", "Manual", 5, 2023, "hyundai-venue.webp",
-     "A compact SUV for everyday travel and weekend getaways. Blue exterior with a raised seating position. Image is an illustrative studio render."),
+     "A compact SUV for everyday travel and weekend getaways. White exterior with a raised seating position."),
     ("TVS Jupiter", "Bike", "Salem", "600", "Automatic", 2, 2022, "tvs-jupiter.webp",
-     "An easy-to-ride automatic scooter for short city trips and daily errands. Bronze exterior and a comfortable two-person seat. Image is an illustrative studio render."),
+     "An easy-to-ride automatic scooter for short city trips and daily errands. Bronze exterior and a comfortable two-person seat."),
     ("Yamaha MT-15", "Bike", "Tiruchirappalli", "1100", "Manual", 2, 2023, "yamaha-mt15.webp",
-     "A sporty street motorcycle with an upright riding position, cyan accents and a lightweight profile. Image is an illustrative studio render."),
+     "A sporty street motorcycle with an upright riding position, silver bodywork, yellow wheels and a lightweight profile."),
 ]
+
+def cover_matches(cover, data):
+    """True when the listing's cover is already this bundled photo (so re-runs do not duplicate it)."""
+    if cover is None:
+        return False
+    try:
+        with cover.image.open("rb") as stored:
+            return stored.read() == data
+    except OSError:
+        return False
+
 
 class Command(BaseCommand):
     help = "Archive the existing local catalog and create complete illustrative demo listings."
@@ -65,7 +76,6 @@ class Command(BaseCommand):
             vehicle.archived_at = None
             vehicle.full_clean()
             vehicle.save()
-            cover = vehicle.cover_photo
-            if cover is None or Path(cover.image.name).stem.split("_")[0] != Path(image).stem:
+            if not cover_matches(vehicle.cover_photo, images[image]):
                 add_photo(vehicle, ContentFile(images[image], name=image), cover=True)
         self.stdout.write(self.style.SUCCESS(f"Archived {count} old listings; {len(CATALOG)} complete demo listings ready. Booking history preserved."))

@@ -5,7 +5,7 @@ import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { signIn } from './api'
 import { Busy, Notice } from './shared'
 import { formData, useSession } from './requests'
-import heroImage from './assets/studio-car.png'
+import heroImage from './assets/auth-city.webp'
 
 export function Password({ label, name, autoComplete, required = true }: {
   label: string; name: string; autoComplete: string; required?: boolean

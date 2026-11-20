@@ -16,7 +16,7 @@ import { RentalCalendar } from "./RentalCalendar";
 import { FavoriteButton, Rating } from "./Favorites";
 import { Breadcrumb } from "./Breadcrumb";
 import { overlapsUnavailableDates } from "./marketplaceData";
-import heroImage from "./assets/studio-commuter.webp";
+import heroImage from "./assets/hero-splendor.webp";
 
 type CatalogResult = {
   count: number;
@@ -124,7 +124,7 @@ export function Home() {
           <img
             className="hero-vehicle"
             src={heroImage}
-            alt="Unbranded black commuter motorcycle, realistic studio render"
+            alt="Hero Honda Splendor NXG motorcycle parked on a paved street"
           />
           <span className="hero-caption">THE FREEDOM TO GO YOUR WAY</span>
         </div>
