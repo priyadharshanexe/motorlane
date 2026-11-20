@@ -33,7 +33,7 @@ def with_review_summary(vehicles):
 
 
 def verified_reviews(vehicle):
-    return Feedback.objects.filter(vehicle=vehicle, booking__isnull=False)
+    return Feedback.objects.filter(vehicle=vehicle)
 
 
 def search_vehicles(params):

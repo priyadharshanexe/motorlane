@@ -39,6 +39,11 @@ class Vehicle(models.Model):
     archived_at = models.DateTimeField(null=True, blank=True)
 
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(price_per_day__gte=0), name="vehicle_price_non_negative"),
+        ]
+
     def __str__(self):
         return self.name
 
@@ -82,6 +87,11 @@ class Booking(models.Model):
                 condition=models.Q(status__in=["Pending", "Confirmed", "Rejected", "Expired",
                                                "Cancelled", "In progress", "Returned"]),
                 name="booking_status_valid",
+            ),
+            models.CheckConstraint(condition=models.Q(total_price__gte=0), name="booking_total_non_negative"),
+            models.CheckConstraint(
+                condition=models.Q(quoted_daily_rate__isnull=True) | models.Q(quoted_daily_rate__gte=0),
+                name="booking_daily_rate_non_negative",
             ),
         ]
         indexes = [
@@ -142,14 +152,18 @@ class MaintenanceBlock(models.Model):
 
 
 class Feedback(models.Model):
-    booking = models.OneToOneField(
-        Booking, on_delete=models.CASCADE, null=True, blank=True, related_name="review",
-    )
+    # One verified review per completed booking: the one-to-one makes the booking unique.
+    booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name="review")
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE)
     rating = models.IntegerField()
     comment = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(rating__gte=1, rating__lte=5), name="feedback_rating_1_to_5"),
+        ]
 
     def __str__(self):
         return f"{self.user.name} - {self.vehicle.name}"

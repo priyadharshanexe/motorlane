@@ -96,3 +96,24 @@ class TimelineTests(TestCase):
         self.client.force_login(self.owner.account)
         self.assertEqual(self.client.post(reverse("api_booking_action", args=[booking.pk, "return"]), secure=True).status_code, 409)
         self.assertEqual(booking.events.count(), 1)
+
+
+class ConstraintTests(TestCase):
+    def test_database_rejects_bad_ratings_duplicate_reviews_and_negative_prices(self):
+        from django.db import IntegrityError, transaction
+
+        from .models import Feedback
+        renter = make_profile("rater")
+        vehicle = Vehicle.objects.create(name="Car", vehicle_type="Car", price_per_day=100)
+        booking = Booking.objects.create(user=renter, vehicle=vehicle, start_date=timezone.localdate(),
+                                         end_date=timezone.localdate(), total_price=100, status="Returned")
+        for rating in (0, 6):
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                Feedback.objects.create(booking=booking, user=renter, vehicle=vehicle, rating=rating, comment="x")
+        Feedback.objects.create(booking=booking, user=renter, vehicle=vehicle, rating=5, comment="Good")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Feedback.objects.create(booking=booking, user=renter, vehicle=vehicle, rating=4, comment="Again")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Vehicle.objects.filter(pk=vehicle.pk).update(price_per_day=-1)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Booking.objects.filter(pk=booking.pk).update(total_price=-5)
