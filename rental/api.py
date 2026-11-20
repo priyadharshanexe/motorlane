@@ -31,7 +31,7 @@ from .serializers import (
 from .services.booking import reserve_vehicle, transition_booking
 from .services.listing import archive_listing, create_listing
 from .services.maintenance import schedule_maintenance
-from .services.pricing import rental_quote
+from .services.pricing import price_rental
 from .services.profiles import rental_profile
 
 
@@ -70,10 +70,10 @@ class VehicleList(generics.ListAPIView):
     queryset = listed_vehicles().order_by("name", "pk")
 
     def list(self, request, *args, **kwargs):
-        vehicles, _, dates = search_vehicles(request.query_params)
-        if dates.is_bound and not dates.is_valid():
-            return Response(dates.errors, status=400)
-        rows = self.paginate_queryset(with_review_summary(vehicles).order_by("name", "pk"))
+        vehicles, _, errors = search_vehicles(request.query_params)
+        if errors:
+            return Response(errors, status=400)
+        rows = self.paginate_queryset(vehicles)
         return self.get_paginated_response(self.get_serializer(rows, many=True).data)
 
 
@@ -313,10 +313,10 @@ def quote(request, pk):
     if not form.is_valid():
         return Response(form.errors, status=400)
     try:
-        days, total = rental_quote(vehicle, **form.cleaned_data)
+        quote = price_rental(vehicle, *form.window)
     except ValidationError as error:
         return conflict(error)
-    return Response({"days": days, "total_price": str(total)})
+    return Response(quote.as_dict())
 
 
 @api_view(["GET", "POST", "DELETE"])

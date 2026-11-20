@@ -191,3 +191,19 @@ HEADLESS_FRONTEND_URLS = {
     "account_reset_password_from_key": "/app/reset-password/{key}",
     "account_signup": "/app/register",
 }
+
+# Rental policy. Every value can be overridden from the environment.
+RENTAL_TURNAROUND_MINUTES = int(os.getenv("RENTAL_TURNAROUND_MINUTES", "120"))
+RENTAL_LONG_RENTAL_DISCOUNTS = (  # (minimum billable days, percent off), largest first
+    (30, int(os.getenv("RENTAL_MONTHLY_DISCOUNT_PERCENT", "20"))),
+    (7, int(os.getenv("RENTAL_WEEKLY_DISCOUNT_PERCENT", "10"))),
+)
+RENTAL_FREE_CANCELLATION_HOURS = int(os.getenv("RENTAL_FREE_CANCELLATION_HOURS", "48"))
+RENTAL_CANCELLATION_FEE_PERCENT = int(os.getenv("RENTAL_CANCELLATION_FEE_PERCENT", "20"))
+
+# Payments: Razorpay TEST mode when test keys are configured, otherwise a built-in fake
+# provider with the same interface. Live keys are refused (see rental/payments/).
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
+PAYMENT_WEBHOOK_SECRET = os.getenv("PAYMENT_WEBHOOK_SECRET", "")
+PAYMENT_CURRENCY = "INR"

@@ -1,10 +1,10 @@
 """Read-only queries shared by the API, admin views and management commands."""
 from django.db import models
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, F, Q
 from django.utils import timezone
 
-from .forms import BookingDatesForm
-from .models import Booking, Feedback, MaintenanceBlock, Vehicle
+from .forms import BookingDatesForm, SearchForm
+from .models import Booking, Feedback, Vehicle
 
 
 def active_bookings():
@@ -36,27 +36,51 @@ def verified_reviews(vehicle):
     return Feedback.objects.filter(vehicle=vehicle)
 
 
+SORTS = {
+    "name": ("name", "pk"),
+    "price": ("price_per_day", "name", "pk"),
+    "-price": ("-price_per_day", "name", "pk"),
+    "rating": (F("review_average").desc(nulls_last=True), "-review_total", "name", "pk"),
+    "newest": ("-created_at", "-pk"),
+}
+
+
+def location_filter(value):
+    """Comma-separated places; each matches a listing's city case-insensitively, by prefix."""
+    query = Q()
+    for place in (part.strip() for part in value.split(",")):
+        if place:
+            query |= Q(location__istartswith=place) | Q(location__icontains=f", {place}")
+    return query
+
+
 def search_vehicles(params):
-    vehicles = listed_vehicles()
-    filters = {key: params.get(key, "").strip() for key in
-               ("q", "type", "fuel", "location", "start_date", "end_date")}
-    for key, lookup in (("q", "name__icontains"), ("type", "vehicle_type"),
-                        ("fuel", "fuel_type__icontains"), ("location", "location__icontains")):
+    """Filter, check availability for the requested window, and sort. Returns (rows, filters, errors)."""
+    from .services.availability import unavailable_vehicle_ids
+
+    vehicles = with_review_summary(listed_vehicles())
+    keys = ("q", "type", "fuel", "location", "start_date", "end_date", "min_price", "max_price", "sort")
+    filters = {key: params.get(key, "").strip() for key in keys}
+    for key, lookup in (("q", "name__icontains"), ("type", "vehicle_type"), ("fuel", "fuel_type__icontains")):
         if filters[key]:
             vehicles = vehicles.filter(**{lookup: filters[key]})
+    if filters["location"]:
+        vehicles = vehicles.filter(location_filter(filters["location"]))
+    form = SearchForm(params)
     dates = BookingDatesForm(params if filters["start_date"] or filters["end_date"] else None)
-    if dates.is_bound and dates.is_valid():
-        conflicting = active_bookings().filter(
-            start_date__lte=dates.cleaned_data["end_date"],
-            end_date__gte=dates.cleaned_data["start_date"],
-        )
-        blocked = MaintenanceBlock.objects.filter(
-            start_date__lte=dates.cleaned_data["end_date"], end_date__gte=dates.cleaned_data["start_date"],
-        )
-        vehicles = vehicles.exclude(pk__in=conflicting.values("vehicle_id")).exclude(
-            pk__in=blocked.values("vehicle_id")
-        )
-    return vehicles, filters, dates
+    errors = {}
+    if not form.is_valid():
+        errors.update(form.errors)
+    if dates.is_bound and not dates.is_valid():
+        errors.update(dates.errors)
+    if errors:
+        return vehicles.none(), filters, errors
+    for key, lookup in (("min_price", "price_per_day__gte"), ("max_price", "price_per_day__lte")):
+        if form.cleaned_data[key] is not None:
+            vehicles = vehicles.filter(**{lookup: form.cleaned_data[key]})
+    if dates.is_bound:
+        vehicles = vehicles.exclude(pk__in=unavailable_vehicle_ids(*dates.window))
+    return vehicles.order_by(*SORTS[form.cleaned_data["sort"] or "name"]), filters, None
 
 
 def completed_booking_values(owner, form):

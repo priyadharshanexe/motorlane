@@ -39,16 +39,65 @@ class ReservationConcurrencyTests(TransactionTestCase):
         self.assertCountEqual(results, ["reserved", "You can only have 3 active bookings at a time."])
         self.assertEqual(Booking.objects.filter(user=renter).count(), 3)
 
-    def reserve_in_parallel(self, requests):
-        barrier = Barrier(2)
-        rental_date = timezone.localdate() + timedelta(days=1)
+    @skipUnlessDBFeature("has_select_for_update")
+    def test_parallel_requests_inside_the_turnaround_buffer_leave_one(self):
+        from datetime import time
+        renters = [make_profile(f"slot{i}") for i in range(2)]
+        vehicle = Vehicle.objects.create(name="Car", vehicle_type="Car", price_per_day=100)
+        # 09:00-12:00 and 13:00-16:00 do not overlap, but are closer than the 2-hour cleaning buffer.
+        slots = [(time(9), time(12)), (time(13), time(16))]
+        results = self.reserve_in_parallel(
+            [(renter.pk, vehicle.pk) for renter in renters], times=slots,
+        )
+        self.assertCountEqual(results, ["reserved", "Vehicle already booked for these dates."])
+        self.assertEqual(Booking.objects.filter(vehicle=vehicle).count(), 1)
 
-        def reserve(request):
-            renter_id, vehicle_id = request
+    @skipUnlessDBFeature("has_select_for_update")
+    def test_parallel_booking_and_maintenance_leave_one(self):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from .services.maintenance import schedule_maintenance
+        renter = make_profile("racer")
+        vehicle = Vehicle.objects.create(name="Van", vehicle_type="Car", price_per_day=100)
+        day = timezone.localdate() + timedelta(days=1)
+        barrier = Barrier(2)
+
+        def book():
+            reserve_vehicle(renter.pk, vehicle.pk, day, day)
+
+        def block():
+            from django.db import transaction
+            with transaction.atomic():
+                locked = Vehicle.objects.select_for_update().get(pk=vehicle.pk)
+                schedule_maintenance(locked, day, day, "Service")
+
+        def run(job):
             close_old_connections()
             try:
                 barrier.wait(timeout=10)
-                reserve_vehicle(renter_id, vehicle_id, rental_date, rental_date)
+                job()
+                return "ok"
+            except DjangoValidationError:
+                return "refused"
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(run, [book, block]))
+        self.assertCountEqual(results, ["ok", "refused"])
+        self.assertEqual(Booking.objects.filter(vehicle=vehicle).count() + vehicle.maintenance_blocks.count(), 1)
+
+    def reserve_in_parallel(self, requests, times=None):
+        barrier = Barrier(2)
+        rental_date = timezone.localdate() + timedelta(days=1)
+
+        def reserve(indexed):
+            index, (renter_id, vehicle_id) = indexed
+            pickup, dropoff = times[index] if times else (None, None)
+            close_old_connections()
+            try:
+                barrier.wait(timeout=10)
+                reserve_vehicle(renter_id, vehicle_id, rental_date, rental_date, pickup, dropoff)
                 return "reserved"
             except ValidationError as error:
                 return error.messages[0]
@@ -56,7 +105,7 @@ class ReservationConcurrencyTests(TransactionTestCase):
                 connections.close_all()
 
         with ThreadPoolExecutor(max_workers=2) as pool:
-            return list(pool.map(reserve, requests))
+            return list(pool.map(reserve, enumerate(requests)))
 
     @skipUnlessDBFeature("has_select_for_update")
     def test_concurrent_listings_respect_owner_limit(self):

@@ -6,10 +6,12 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from ..models import Booking, Profile, MaintenanceBlock, Vehicle
+from ..forms import rental_window
+from ..models import Booking, Profile, Vehicle
 from ..selectors import active_bookings
+from .availability import availability_problem
 from .events import record_event
-from .pricing import rental_quote
+from .pricing import price_rental
 from .profiles import rental_profile
 
 logger = logging.getLogger(__name__)
@@ -18,7 +20,7 @@ REQUEST_RESPONSE_HOURS = 24
 
 
 @transaction.atomic
-def reserve_vehicle(user_id, vehicle_id, start_date, end_date):
+def reserve_vehicle(user_id, vehicle_id, start_date, end_date, pickup_time=None, return_time=None):
     # Lock in a consistent order so requests serialize per renter and vehicle.
     Profile.objects.select_for_update().get(pk=user_id)
     vehicle = get_object_or_404(Vehicle.objects.select_for_update(), pk=vehicle_id)
@@ -29,16 +31,15 @@ def reserve_vehicle(user_id, vehicle_id, start_date, end_date):
         raise forms.ValidationError("This vehicle is no longer available.")
     if active.filter(user_id=user_id).count() >= 3:
         raise forms.ValidationError("You can only have 3 active bookings at a time.")
-    if active.filter(vehicle=vehicle, start_date__lte=end_date, end_date__gte=start_date).exists():
-        raise forms.ValidationError("Vehicle already booked for these dates.")
-    if MaintenanceBlock.objects.filter(
-        vehicle=vehicle, start_date__lte=end_date, end_date__gte=start_date,
-    ).exists():
-        raise forms.ValidationError("This vehicle has scheduled maintenance for those dates.")
-    _, total_price = rental_quote(vehicle, start_date, end_date)
+    pickup_at, return_at = rental_window(start_date, end_date, pickup_time, return_time)
+    if problem := availability_problem(vehicle, pickup_at, return_at):
+        raise forms.ValidationError(problem)
+    quote = price_rental(vehicle, pickup_at, return_at)
     booking = Booking.objects.create(
         user_id=user_id, vehicle=vehicle, start_date=start_date, end_date=end_date,
-        total_price=total_price, quoted_daily_rate=vehicle.price_per_day,
+        pickup_time=timezone.localtime(pickup_at).time(), return_time=timezone.localtime(return_at).time(),
+        total_price=quote.rental_total, quoted_daily_rate=vehicle.price_per_day,
+        deposit_amount=quote.deposit, price_breakdown=quote.as_dict(),
         expires_at=timezone.now() + timedelta(hours=REQUEST_RESPONSE_HOURS),
     )
     record_event(booking, "", Booking.Status.PENDING, actor=booking.user.user, note="Rental requested.")

@@ -25,7 +25,8 @@ class VehicleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Vehicle
-        fields = ("id", "name", "vehicle_type", "fuel_type", "location", "price_per_day", "vehicle_image",
+        fields = ("id", "name", "vehicle_type", "fuel_type", "location", "price_per_day", "weekend_price_per_day",
+                  "deposit", "vehicle_image",
                   "description", "transmission", "seats", "model_year", "pickup_instructions", "rating",
                   "review_count")
 
@@ -62,7 +63,8 @@ class BookingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Booking
-        fields = ("id", "vehicle", "start_date", "end_date", "status", "total_price", "quoted_daily_rate",
+        fields = ("id", "vehicle", "start_date", "end_date", "pickup_time", "return_time", "status", "total_price",
+                  "deposit_amount", "price_breakdown", "quoted_daily_rate",
                   "renter_name", "contact_name", "contact_phone", "pickup_notes", "picked_up_at",
                   "returned_at", "reviewed", "overdue", "status_changed_at")
 
