@@ -1,0 +1,1 @@
+{% extends "rental/emails/base.txt" %}{% block content %}Your rental is complete. A short review helps other renters and the owner. It takes under a minute.{% endblock %}{% block action %}Leave a review{% endblock %}

@@ -1,0 +1,12 @@
+{% autoescape off %}Hi {{ recipient_name }},
+
+{% block content %}{% endblock %}
+
+Vehicle: {{ vehicle.name }}
+Pickup:  {{ booking.start_date|date:"D j M Y" }}, {{ booking.pickup_time|time:"H:i" }}
+Return:  {{ booking.end_date|date:"D j M Y" }}, {{ booking.return_time|time:"H:i" }}
+Booking: #{{ booking.pk }}
+
+{% block action %}View booking{% endblock %}: {{ site_url }}{% block link %}/app/bookings{% endblock %}
+
+-- Motorlane{% endautoescape %}

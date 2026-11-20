@@ -1,0 +1,1 @@
+{% extends "rental/emails/base.html" %}{% block content %}<p>A reminder that your rental starts tomorrow. Bring your driving licence and arrange the meeting point with the owner.{% if vehicle.pickup_instructions %} Pickup notes: {{ vehicle.pickup_instructions }}{% endif %}</p>{% endblock %}

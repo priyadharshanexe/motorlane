@@ -1,0 +1,1 @@
+{% extends "rental/emails/base.txt" %}{% block content %}Your booking is cancelled.{% if refund %} We are refunding ₹{{ refund }}{% if fee %} (a ₹{{ fee }} late cancellation fee applied){% endif %}. Refunds usually reach you in 5 to 7 working days.{% else %} Nothing was charged.{% endif %}{% endblock %}

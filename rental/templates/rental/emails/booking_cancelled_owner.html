@@ -1,0 +1,1 @@
+{% extends "rental/emails/base.html" %}{% block content %}<p>{{ renter_name }} cancelled their booking, so your {{ vehicle.name }} is free again for these dates.{% if fee %} You keep the ₹{{ fee }} late cancellation fee.{% endif %}</p>{% endblock %}{% block link %}/app/owner{% endblock %}{% block action %}Open dashboard{% endblock %}

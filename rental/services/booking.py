@@ -11,6 +11,7 @@ from ..models import Booking, Profile, Vehicle
 from ..selectors import active_bookings
 from .availability import availability_problem
 from .events import record_event
+from .notifications import notify
 from .pricing import price_rental
 from .profiles import rental_profile
 
@@ -43,6 +44,7 @@ def reserve_vehicle(user_id, vehicle_id, start_date, end_date, pickup_time=None,
         expires_at=timezone.now() + timedelta(hours=REQUEST_RESPONSE_HOURS),
     )
     record_event(booking, "", Booking.Status.PENDING, actor=booking.user.user, note="Rental requested.")
+    notify("request_received", booking)
     return booking
 
 
@@ -78,5 +80,24 @@ def transition_booking(actor, booking_id, destination, allowed, *, owner=False):
         "status", "picked_up_at", "returned_at", "status_changed_at", "status_changed_by",
     ])
     record_event(booking, previous, destination, actor=actor)
+    announce_transition(booking, destination)
     logger.info("booking_status_changed booking_id=%s actor_id=%s status=%s", booking.pk, actor.pk, destination)
     return booking
+
+
+def announce_transition(booking, destination, **extra):
+    from datetime import timedelta
+
+    from django.conf import settings
+    Status = Booking.Status
+    if destination == Status.CONFIRMED:
+        notify("request_approved", booking, due_now=booking.total_price + booking.deposit_amount,
+               free_until=booking.pickup_at - timedelta(hours=settings.RENTAL_FREE_CANCELLATION_HOURS))
+    elif destination == Status.REJECTED:
+        notify("request_rejected", booking)
+    elif destination == Status.CANCELLED:
+        notify("booking_cancelled", booking, **extra)
+        notify("booking_cancelled_owner", booking, **extra)
+    elif destination == Status.RETURNED:
+        notify("return_received", booking, **extra)
+        notify("review_request", booking)

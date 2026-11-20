@@ -1,0 +1,1 @@
+{% extends "rental/emails/base.html" %}{% block content %}<p>{{ renter_name }} asked to rent your {{ vehicle.name }}. The request expires {{ booking.expires_at|date:'D j M, H:i' }} if you do not respond. The rental is worth ₹{{ booking.total_price }}.</p>{% endblock %}{% block link %}/app/owner{% endblock %}{% block action %}Review request{% endblock %}

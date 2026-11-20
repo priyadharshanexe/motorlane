@@ -1,0 +1,1 @@
+{% extends "rental/emails/base.txt" %}{% block content %}Good news: the owner confirmed your rental. Complete the payment of ₹{{ due_now }} (₹{{ booking.total_price }} rental plus a ₹{{ booking.deposit_amount }} refundable deposit) to secure it. Free cancellation is available until {{ free_until|date:'D j M, H:i' }}.{% endblock %}

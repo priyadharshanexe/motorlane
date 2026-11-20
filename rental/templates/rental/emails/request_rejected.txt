@@ -1,0 +1,1 @@
+{% extends "rental/emails/base.txt" %}{% block content %}The owner could not accept your request this time. Nothing was charged. Other vehicles may be free for the same dates.{% endblock %}{% block link %}/app/{% endblock %}{% block action %}Search again{% endblock %}
