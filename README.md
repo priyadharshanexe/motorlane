@@ -8,7 +8,7 @@ availability, incoming requests, maintenance, and completed booking value.
 
 ![Motorlane marketplace homepage](docs/screenshots/marketplace.jpg)
 
-Screenshots from 18 November 2026 predate the switch to real vehicle photographs. Signed-in pages use demo accounts.
+Screenshots refreshed on 20 November 2026 from the Docker app with real vehicle photographs. Signed-in pages use demo accounts.
 
 ## Architecture
 

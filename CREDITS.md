@@ -29,6 +29,6 @@ The Google multicolor sign-in mark is embedded in
 authentication provider. Google retains its brand rights.
 
 Project screenshots in `docs/screenshots/` were captured from the running
-Motorlane application with demo accounts on 18 November 2026. They were taken
-before the AI renders were replaced and may still show them. Fonts are loaded from Google Fonts. DM Sans and Manrope
+Motorlane application with demo accounts on 20 November 2026 and show the
+Wikimedia Commons photographs credited above. Fonts are loaded from Google Fonts. DM Sans and Manrope
 retain their respective font licenses.
