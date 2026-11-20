@@ -61,8 +61,17 @@ With the local environment configured, run:
 docker compose --profile app build web
 docker compose up --wait db
 docker compose --profile app run --rm web python manage.py migrate
-docker compose --profile app up -d web
+docker compose --profile app up -d web scheduler
 ```
+
+The `scheduler` service runs `python manage.py run_scheduled_jobs` every
+`SCHEDULER_INTERVAL_SECONDS` (default 300). The jobs are idempotent, so a restart
+or a second instance is harmless. `expire_bookings` marks pending requests whose
+24-hour response window or pickup date has passed as Expired, and confirmed
+bookings that were never picked up by the end of their rental window as Expired
+(owners may record a late pickup until then). Each change is written to the
+booking's timeline. Run a job by hand with
+`docker compose --profile app exec scheduler python manage.py expire_bookings`.
 
 The web image builds React, collects static files, and serves Django through
 Gunicorn. For production, set `DJANGO_DEBUG=0`, supply secrets through the
