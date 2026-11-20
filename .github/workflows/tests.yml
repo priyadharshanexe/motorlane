@@ -49,12 +49,13 @@ jobs:
           DJANGO_SECRET_KEY: ci-only-signing-key-for-the-container-smoke-test-0123456789
           MYSQL_PASSWORD: ci-only-database-password
         run: |
-          printf 'DJANGO_SECRET_KEY=%s
-MYSQL_NAME=vehicle_rental
-MYSQL_USER=vehicle_rental
-MYSQL_PASSWORD=%s
-DJANGO_DEBUG=1
-' "$DJANGO_SECRET_KEY" "$MYSQL_PASSWORD" > .env
+          {
+            echo "DJANGO_SECRET_KEY=$DJANGO_SECRET_KEY"
+            echo "MYSQL_NAME=vehicle_rental"
+            echo "MYSQL_USER=vehicle_rental"
+            echo "MYSQL_PASSWORD=$MYSQL_PASSWORD"
+            echo "DJANGO_DEBUG=1"
+          } > .env
           docker compose --profile app build
           docker compose up --wait db
           docker compose --profile app run --rm web python manage.py migrate --noinput
