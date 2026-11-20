@@ -84,7 +84,7 @@ class VehicleList(generics.ListAPIView):
 def bookings(request):
     profile = rental_profile(request.user)
     if request.method == "GET":
-        rows = Booking.objects.filter(user=profile).select_related("vehicle", "user__user", "review").order_by(
+        rows = Booking.objects.filter(user=profile).select_related("vehicle", "user__user", "review", "payment").order_by(
             "-start_date", "-pk")
         return Response(BookingSerializer(rows, many=True, context={"request": request}).data)
     throttle = BookingCreationThrottle()
@@ -145,7 +145,7 @@ class OwnerBookings(generics.ListAPIView):
     serializer_class = BookingSerializer
 
     def get_queryset(self):
-        return owner_bookings(self.request.user).select_related("vehicle", "user__user", "review").order_by("start_date", "pk")
+        return owner_bookings(self.request.user).select_related("vehicle", "user__user", "review", "payment").order_by("start_date", "pk")
 
 
 def visible_booking(user, pk):
@@ -153,7 +153,7 @@ def visible_booking(user, pk):
     from django.db.models import Q
     return get_object_or_404(
         Booking.objects.filter(Q(user__user=user) | Q(vehicle__owner__user=user))
-        .select_related("vehicle", "user__user", "review").select_related("vehicle__owner").prefetch_related("events"),
+        .select_related("vehicle", "user__user", "review", "payment").select_related("vehicle__owner").prefetch_related("events"),
         pk=pk,
     )
 
@@ -332,3 +332,96 @@ def favorites(request, pk=None):
         return Response(status=204)
     Favorite.objects.get_or_create(user=request.user, vehicle=vehicle)
     return Response({"saved": True})
+
+
+# Payments ---------------------------------------------------------------------------------
+
+def renter_booking_locked(user, pk):
+    return get_object_or_404(renter_bookings(user).select_for_update(), pk=pk)
+
+
+@api_view(["POST"])
+@authentication_classes(SESSION_AUTH)
+@permission_classes(SIGNED_IN)
+@transaction.atomic
+def payment_start(request, pk):
+    """Open (or reopen) checkout for a confirmed booking. Returns what the checkout widget needs."""
+    from .payments.providers import get_provider
+    from .payments.service import start_payment
+    booking = renter_booking_locked(request.user, pk)
+    try:
+        payment = start_payment(booking)
+    except ValidationError as error:
+        return conflict(error)
+    return Response(get_provider().checkout_options(payment))
+
+
+class CheckoutResultSerializer(serializers.Serializer):
+    order_id = serializers.CharField(max_length=64)
+    payment_id = serializers.CharField(max_length=64)
+    signature = serializers.CharField(max_length=128)
+
+
+@api_view(["POST"])
+@authentication_classes(SESSION_AUTH)
+@permission_classes(SIGNED_IN)
+@transaction.atomic
+def payment_confirm(request, pk):
+    """Verify the checkout signature and mark the booking paid."""
+    from .payments.service import confirm_checkout
+    booking = renter_booking_locked(request.user, pk)
+    data = CheckoutResultSerializer(data=request.data)
+    data.is_valid(raise_exception=True)
+    try:
+        payment = confirm_checkout(booking, **data.validated_data)
+    except ValidationError as error:
+        return Response({"detail": error.messages[0]}, status=400)
+    return Response({"status": payment.status, "amount": str(payment.amount)})
+
+
+@api_view(["POST"])
+@authentication_classes(SESSION_AUTH)
+@permission_classes(SIGNED_IN)
+@transaction.atomic
+def payment_fake_checkout(request, pk):
+    """Fake provider only: stands in for the checkout widget and returns a signed result."""
+    from .models import Payment
+    from .payments.providers import FakeProvider, get_provider
+    provider = get_provider()
+    if not isinstance(provider, FakeProvider):
+        raise Http404
+    booking = renter_booking_locked(request.user, pk)
+    payment = get_object_or_404(Payment, booking=booking, status=Payment.Status.CREATED)
+    return Response(provider.simulate_checkout(payment))
+
+
+@never_cache
+@api_view(["GET"])
+@authentication_classes(SESSION_AUTH)
+@permission_classes(SIGNED_IN)
+def cancellation_preview(request, pk):
+    """What cancelling now would cost: the fee kept and the amount refunded."""
+    from datetime import timedelta
+
+    from .payments.service import cancellation_terms
+    booking = get_object_or_404(renter_bookings(request.user), pk=pk)
+    fee, refund = cancellation_terms(booking)
+    free_until = booking.pickup_at - timedelta(hours=settings.RENTAL_FREE_CANCELLATION_HOURS)
+    return Response({"fee": str(fee), "refund": str(refund), "free_until": free_until,
+                     "fee_percent": settings.RENTAL_CANCELLATION_FEE_PERCENT})
+
+
+@api_view(["POST"])
+@authentication_classes([])
+@permission_classes(PUBLIC)
+def payment_webhook(request):
+    """Provider webhook. Authenticated by the X-Razorpay-Signature HMAC, not by session."""
+    from .payments.service import handle_webhook
+    try:
+        result = handle_webhook(request.body, request.headers.get("X-Razorpay-Signature", ""),
+                                request.headers.get("X-Razorpay-Event-Id", ""))
+    except PermissionError:
+        return Response({"detail": "Invalid signature."}, status=400)
+    except ValueError:
+        return Response({"detail": "Malformed event."}, status=400)
+    return Response({"result": result})

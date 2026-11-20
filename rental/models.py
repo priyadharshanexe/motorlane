@@ -110,6 +110,9 @@ class Booking(models.Model):
     price_breakdown = models.JSONField(default=dict, blank=True,
                                        help_text="The quote shown to the renter, line by line, at booking time.")
     reminder_sent_at = models.DateTimeField(null=True, blank=True, editable=False)
+    payment_required = models.BooleanField(
+        default=False, help_text="Set for bookings made through checkout; pickup then needs a completed payment.",
+    )
     expires_at = models.DateTimeField(null=True, blank=True)
     status_changed_at = models.DateTimeField(null=True, blank=True)
     status_changed_by = models.ForeignKey(
@@ -223,3 +226,60 @@ class Favorite(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user", "vehicle"], name="unique_saved_vehicle")]
+
+
+class Payment(models.Model):
+    """One payment per booking: rental charge plus refundable deposit, and any refunds."""
+
+    class Status(models.TextChoices):
+        CREATED = "created"
+        PAID = "paid"
+        PARTIALLY_REFUNDED = "partially_refunded"
+        REFUNDED = "refunded"
+        FAILED = "failed"
+
+    booking = models.OneToOneField(Booking, on_delete=models.PROTECT, related_name="payment")
+    provider = models.CharField(max_length=20)
+    order_id = models.CharField(max_length=64, unique=True)
+    payment_id = models.CharField(max_length=64, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    deposit = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    currency = models.CharField(max_length=3, default="INR")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.CREATED)
+    refunded_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    cancellation_fee = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    created_at = models.DateTimeField(default=timezone.now)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name="payment_amount_positive"),
+            models.CheckConstraint(condition=models.Q(refunded_amount__gte=0) & models.Q(refunded_amount__lte=models.F("amount")),
+                                   name="payment_refund_within_amount"),
+        ]
+
+    @property
+    def is_paid(self):
+        return self.status in (self.Status.PAID, self.Status.PARTIALLY_REFUNDED, self.Status.REFUNDED)
+
+
+class Refund(models.Model):
+    payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="refunds")
+    provider_refund_id = models.CharField(max_length=64, unique=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.CharField(max_length=40)
+    processed = models.BooleanField(default=False, help_text="Set when the provider confirms it by webhook.")
+    created_at = models.DateTimeField(default=timezone.now)
+
+
+class WebhookEvent(models.Model):
+    """Every provider event id we have processed, so a redelivered webhook is applied once."""
+
+    provider = models.CharField(max_length=20)
+    event_id = models.CharField(max_length=100)
+    event_type = models.CharField(max_length=60)
+    payload = models.JSONField()
+    received_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["provider", "event_id"], name="unique_provider_event")]

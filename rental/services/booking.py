@@ -40,7 +40,7 @@ def reserve_vehicle(user_id, vehicle_id, start_date, end_date, pickup_time=None,
         user_id=user_id, vehicle=vehicle, start_date=start_date, end_date=end_date,
         pickup_time=timezone.localtime(pickup_at).time(), return_time=timezone.localtime(return_at).time(),
         total_price=quote.rental_total, quoted_daily_rate=vehicle.price_per_day,
-        deposit_amount=quote.deposit, price_breakdown=quote.as_dict(),
+        deposit_amount=quote.deposit, price_breakdown=quote.as_dict(), payment_required=True,
         expires_at=timezone.now() + timedelta(hours=REQUEST_RESPONSE_HOURS),
     )
     record_event(booking, "", Booking.Status.PENDING, actor=booking.user.user, note="Rental requested.")
@@ -58,10 +58,14 @@ def transition_booking(actor, booking_id, destination, allowed, *, owner=False):
     if booking.display_status not in allowed:
         raise forms.ValidationError("This booking has changed. Check its current status.")
 
+    from ..payments import service as payments
+
     today = timezone.localdate()
-    if (destination == Booking.Status.CANCELLED and booking.status == Booking.Status.CONFIRMED
-            and today >= booking.start_date):
-        raise forms.ValidationError("Confirmed bookings can be cancelled before the pickup date.")
+    extra = {}
+    if destination == Booking.Status.CANCELLED and booking.status == Booking.Status.CONFIRMED:
+        if timezone.now() >= booking.pickup_at:
+            raise forms.ValidationError("Confirmed bookings can be cancelled before the pickup time.")
+        extra["fee"], extra["refund"] = payments.refund_cancellation(booking)
     if destination == Booking.Status.CONFIRMED and booking.start_date < today:
         raise forms.ValidationError("The pickup date has passed.")
     if destination == Booking.Status.IN_PROGRESS:
@@ -69,9 +73,12 @@ def transition_booking(actor, booking_id, destination, allowed, *, owner=False):
             raise forms.ValidationError("Pickup must be within the booked dates.")
         if Booking.objects.filter(vehicle=vehicle, status=Booking.Status.IN_PROGRESS).exists():
             raise forms.ValidationError("Record the previous rental's return before pickup.")
+        if not payments.payment_settled(booking):
+            raise forms.ValidationError("The renter has not completed payment yet.")
         booking.picked_up_at = timezone.now()
     if destination == Booking.Status.RETURNED:
         booking.returned_at = timezone.now()
+        extra["refund"] = payments.refund_deposit(booking)
     previous = booking.status
     booking.status = destination
     booking.status_changed_at = timezone.now()
@@ -79,8 +86,11 @@ def transition_booking(actor, booking_id, destination, allowed, *, owner=False):
     booking.save(update_fields=[
         "status", "picked_up_at", "returned_at", "status_changed_at", "status_changed_by",
     ])
-    record_event(booking, previous, destination, actor=actor)
-    announce_transition(booking, destination)
+    note = ""
+    if extra.get("refund"):
+        note = f"Refund of ₹{extra['refund']} issued" + (f"; ₹{extra['fee']} cancellation fee kept." if extra.get("fee") else ".")
+    record_event(booking, previous, destination, actor=actor, note=note)
+    announce_transition(booking, destination, **extra)
     logger.info("booking_status_changed booking_id=%s actor_id=%s status=%s", booking.pk, actor.pk, destination)
     return booking
 
@@ -99,5 +109,5 @@ def announce_transition(booking, destination, **extra):
         notify("booking_cancelled", booking, **extra)
         notify("booking_cancelled_owner", booking, **extra)
     elif destination == Status.RETURNED:
-        notify("return_received", booking, **extra)
+        notify("return_received", booking, refund=extra.get("refund"))
         notify("review_request", booking)

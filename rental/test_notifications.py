@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from .models import Booking, Vehicle
 from .services.booking import reserve_vehicle
-from .testing import make_profile
+from .testing import make_profile, pay
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend", SITE_URL="https://motorlane.test")
@@ -46,6 +46,8 @@ class NotificationTests(TestCase):
     def test_full_lifecycle_emails_reach_the_right_person(self):
         booking = self.request()
         for action in ("approve", "pickup", "return"):
+            if action == "pickup":
+                pay(booking)
             self.act(booking, action)
         sent = [(m.to[0], m.subject) for m in mail.outbox]
         self.assertEqual(sent, [

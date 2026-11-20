@@ -54,6 +54,14 @@ class BookingSerializer(serializers.ModelSerializer):
     renter_name = serializers.CharField(source="user.name")
     reviewed = serializers.SerializerMethodField()
     overdue = serializers.SerializerMethodField()
+    payment = serializers.SerializerMethodField()
+
+    def get_payment(self, booking) -> dict | None:
+        payment = getattr(booking, "payment", None) if hasattr(booking, "payment") else None
+        if payment is None:
+            return None
+        return {"status": payment.status, "amount": str(payment.amount), "refunded": str(payment.refunded_amount),
+                "cancellation_fee": str(payment.cancellation_fee), "provider": payment.provider}
 
     def get_overdue(self, booking) -> bool:
         return booking.status == Booking.Status.IN_PROGRESS and booking.end_date < timezone.localdate()
@@ -66,7 +74,7 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = ("id", "vehicle", "start_date", "end_date", "pickup_time", "return_time", "status", "total_price",
                   "deposit_amount", "price_breakdown", "quoted_daily_rate",
                   "renter_name", "contact_name", "contact_phone", "pickup_notes", "picked_up_at",
-                  "returned_at", "reviewed", "overdue", "status_changed_at")
+                  "returned_at", "reviewed", "overdue", "status_changed_at", "payment_required", "payment")
 
 
 class BookingEventSerializer(serializers.ModelSerializer):

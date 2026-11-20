@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import Booking, BookingEvent, Vehicle
-from .testing import make_profile
+from .testing import make_profile, pay
 from .services.booking import reserve_vehicle
 from .services.expiry import NO_SHOW, PICKUP_DATE_PASSED, REQUEST_TIMED_OUT, expire_bookings
 
@@ -74,6 +74,8 @@ class TimelineTests(TestCase):
         booking = reserve_vehicle(self.renter.pk, self.vehicle.pk, today, today)
         self.client.force_login(self.owner.user)
         for action in ("approve", "pickup", "return"):
+            if action == "pickup":
+                pay(booking)
             url = reverse("api_booking_action", args=[booking.pk, action])
             self.assertEqual(self.client.post(url, secure=True).status_code, 200)
         timeline = self.client.get(reverse("api_booking_timeline", args=[booking.pk]), secure=True).json()
