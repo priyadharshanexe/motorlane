@@ -26,7 +26,7 @@ from .selectors import (
     with_review_summary,
 )
 from .serializers import (
-    BookingSerializer, CheckoutContactSerializer, FleetVehicleSerializer, VehicleSerializer,
+    BookingDetailSerializer, BookingEventSerializer, BookingSerializer, CheckoutContactSerializer, FleetVehicleSerializer, VehicleSerializer,
 )
 from .services.booking import reserve_vehicle, transition_booking
 from .services.listing import archive_listing, create_listing
@@ -146,6 +146,37 @@ class OwnerBookings(generics.ListAPIView):
 
     def get_queryset(self):
         return owner_bookings(self.request.user).select_related("vehicle", "user", "review").order_by("start_date", "pk")
+
+
+def visible_booking(user, pk):
+    """A booking the account rented or whose vehicle it owns; anything else is a 404."""
+    from django.db.models import Q
+    return get_object_or_404(
+        Booking.objects.filter(Q(user__account=user) | Q(vehicle__owner__account=user))
+        .select_related("vehicle", "user", "review").select_related("vehicle__owner").prefetch_related("events"),
+        pk=pk,
+    )
+
+
+@never_cache
+@api_view(["GET"])
+@authentication_classes(SESSION_AUTH)
+@permission_classes(SIGNED_IN)
+def booking_detail(request, pk):
+    booking = visible_booking(request.user, pk)
+    return Response(BookingDetailSerializer(booking, context={"request": request}).data)
+
+
+@never_cache
+@api_view(["GET"])
+@authentication_classes(SESSION_AUTH)
+@permission_classes(SIGNED_IN)
+def booking_timeline(request, pk):
+    booking = visible_booking(request.user, pk)
+    events = booking.events.all()
+    for event in events:
+        event.booking = booking
+    return Response(BookingEventSerializer(events, many=True).data)
 
 
 BOOKING_ACTIONS = {

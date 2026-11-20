@@ -72,6 +72,7 @@ class Booking(models.Model):
     )
     picked_up_at = models.DateTimeField(null=True, blank=True)
     returned_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
 
     class Meta:
         constraints = [
@@ -105,6 +106,27 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"{self.user.name} - {self.vehicle.name}"
+
+class BookingEvent(models.Model):
+    """Append-only audit trail: one row per creation, status change or expiry."""
+
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="events")
+    from_status = models.CharField(max_length=20, blank=True)
+    to_status = models.CharField(max_length=20, choices=Booking.Status.choices)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        help_text="Empty when the system (for example the expiry job) made the change.",
+    )
+    at = models.DateTimeField(default=timezone.now)
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["at", "pk"]
+        indexes = [models.Index(fields=["booking", "at"])]
+
+    def __str__(self):
+        return f"#{self.booking_id} {self.from_status or 'new'} -> {self.to_status}"
+
 
 class MaintenanceBlock(models.Model):
     vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name="maintenance_blocks")

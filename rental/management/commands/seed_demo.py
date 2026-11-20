@@ -11,7 +11,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from rental.models import Booking, CustomUser, Feedback, MaintenanceBlock, Vehicle
+from rental.models import Booking, BookingEvent, CustomUser, Feedback, MaintenanceBlock, Vehicle
 from rental.selectors import active_bookings
 from rental.services.pricing import rental_quote
 
@@ -122,6 +122,23 @@ class Command(BaseCommand):
                 status_changed_by=(renter.account if state == status.CANCELLED else vehicle.owner.account) if changed else None,
                 picked_up_at=pickup if state in (status.IN_PROGRESS, status.RETURNED) else None,
                 returned_at=handback if state == status.RETURNED else None,
+            )
+            requested = min(seeded_at - timedelta(hours=1), pickup - timedelta(days=3))
+            booking.created_at = requested
+            booking.save(update_fields=["created_at"])
+            steps = [("", status.PENDING, renter.account, requested)]
+            if state in (status.CONFIRMED, status.IN_PROGRESS, status.RETURNED):
+                steps.append((status.PENDING, status.CONFIRMED, vehicle.owner.account,
+                              seeded_at if state == status.CONFIRMED else requested + timedelta(hours=2)))
+            if state in (status.IN_PROGRESS, status.RETURNED):
+                steps.append((status.CONFIRMED, status.IN_PROGRESS, vehicle.owner.account, pickup))
+            if state == status.RETURNED:
+                steps.append((status.IN_PROGRESS, status.RETURNED, vehicle.owner.account, handback))
+            if state in (status.CANCELLED, status.REJECTED):
+                steps.append((status.PENDING, state, booking.status_changed_by, changed))
+            BookingEvent.objects.bulk_create(
+                BookingEvent(booking=booking, from_status=a, to_status=b, actor=actor, at=at, note="Demo history.")
+                for a, b, actor, at in steps
             )
             if comment:
                 Feedback.objects.create(booking=booking, vehicle=vehicle, user=renter, rating=5, comment=comment)

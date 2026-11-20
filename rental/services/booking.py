@@ -8,10 +8,13 @@ from django.utils import timezone
 
 from ..models import Booking, CustomUser, MaintenanceBlock, Vehicle
 from ..selectors import active_bookings
+from .events import record_event
 from .pricing import rental_quote
 from .profiles import rental_profile
 
 logger = logging.getLogger(__name__)
+
+REQUEST_RESPONSE_HOURS = 24
 
 
 @transaction.atomic
@@ -33,11 +36,13 @@ def reserve_vehicle(user_id, vehicle_id, start_date, end_date):
     ).exists():
         raise forms.ValidationError("This vehicle has scheduled maintenance for those dates.")
     _, total_price = rental_quote(vehicle, start_date, end_date)
-    return Booking.objects.create(
+    booking = Booking.objects.create(
         user_id=user_id, vehicle=vehicle, start_date=start_date, end_date=end_date,
         total_price=total_price, quoted_daily_rate=vehicle.price_per_day,
-        expires_at=timezone.now() + timedelta(hours=24),
+        expires_at=timezone.now() + timedelta(hours=REQUEST_RESPONSE_HOURS),
     )
+    record_event(booking, "", Booking.Status.PENDING, actor=booking.user.account, note="Rental requested.")
+    return booking
 
 
 @transaction.atomic
@@ -64,11 +69,13 @@ def transition_booking(actor, booking_id, destination, allowed, *, owner=False):
         booking.picked_up_at = timezone.now()
     if destination == Booking.Status.RETURNED:
         booking.returned_at = timezone.now()
+    previous = booking.status
     booking.status = destination
     booking.status_changed_at = timezone.now()
     booking.status_changed_by = actor
     booking.save(update_fields=[
         "status", "picked_up_at", "returned_at", "status_changed_at", "status_changed_by",
     ])
+    record_event(booking, previous, destination, actor=actor)
     logger.info("booking_status_changed booking_id=%s actor_id=%s status=%s", booking.pk, actor.pk, destination)
     return booking

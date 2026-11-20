@@ -1,7 +1,7 @@
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Booking, Vehicle
+from .models import Booking, BookingEvent, Vehicle
 from .selectors import verified_reviews
 
 
@@ -65,3 +65,29 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = ("id", "vehicle", "start_date", "end_date", "status", "total_price", "quoted_daily_rate",
                   "renter_name", "contact_name", "contact_phone", "pickup_notes", "picked_up_at",
                   "returned_at", "reviewed", "overdue", "status_changed_at")
+
+
+class BookingEventSerializer(serializers.ModelSerializer):
+    actor = serializers.SerializerMethodField(
+        help_text="Who made the change: renter, owner, staff, or system (scheduled jobs).")
+
+    def get_actor(self, event) -> str:
+        if event.actor_id is None:
+            return "system"
+        booking = event.booking
+        if event.actor_id == booking.user.account_id:
+            return "renter"
+        if booking.vehicle.owner and event.actor_id == booking.vehicle.owner.account_id:
+            return "owner"
+        return "staff"
+
+    class Meta:
+        model = BookingEvent
+        fields = ("id", "from_status", "to_status", "actor", "at", "note")
+
+
+class BookingDetailSerializer(BookingSerializer):
+    timeline = BookingEventSerializer(source="events", many=True, read_only=True)
+
+    class Meta(BookingSerializer.Meta):
+        fields = (*BookingSerializer.Meta.fields, "created_at", "timeline")
