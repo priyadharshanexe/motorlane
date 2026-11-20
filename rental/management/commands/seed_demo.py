@@ -12,7 +12,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from rental.models import Booking, CustomUser, Feedback, MaintenanceBlock, Vehicle
-from rental.views import active_bookings, rental_quote
+from rental.selectors import active_bookings
+from rental.services.pricing import rental_quote
 
 
 class Command(BaseCommand):

@@ -9,7 +9,7 @@ from django.db.models import Count
 from django.test import TestCase, override_settings
 
 from .models import Booking, Feedback, MaintenanceBlock, Vehicle
-from .views import active_bookings
+from .selectors import active_bookings
 
 
 class SeedDemoTests(TestCase):

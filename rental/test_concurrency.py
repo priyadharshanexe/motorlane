@@ -8,7 +8,7 @@ from django.test import TransactionTestCase, skipUnlessDBFeature
 from django.utils import timezone
 
 from .models import Booking, CustomUser, Vehicle
-from .views import reserve_vehicle
+from .services.booking import reserve_vehicle
 
 
 class ReservationConcurrencyTests(TransactionTestCase):
