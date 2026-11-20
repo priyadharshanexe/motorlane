@@ -27,11 +27,45 @@ jobs:
           python -m pip install -r requirements.txt
       - name: Start MySQL
         run: docker compose up --wait db
-      - name: Check migrations and run tests
+      - name: Check settings, migrations and the API schema
         run: |
+          python manage.py check --fail-level WARNING
           python manage.py makemigrations --check --dry-run
           python manage.py migrate --noinput
-          python manage.py test
+          python manage.py spectacular --validate --fail-on-warn --file /tmp/openapi.yaml
+      - name: Run tests
+        run: python manage.py test --noinput --verbosity 1
+      - name: Migrations reverse cleanly
+        run: |
+          python manage.py migrate rental 0019 --noinput
+          python manage.py migrate --noinput
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image and probe a running stack
+        env:
+          DJANGO_SECRET_KEY: ci-only-signing-key-for-the-container-smoke-test-0123456789
+          MYSQL_PASSWORD: ci-only-database-password
+        run: |
+          printf 'DJANGO_SECRET_KEY=%s
+MYSQL_NAME=vehicle_rental
+MYSQL_USER=vehicle_rental
+MYSQL_PASSWORD=%s
+DJANGO_DEBUG=1
+' "$DJANGO_SECRET_KEY" "$MYSQL_PASSWORD" > .env
+          docker compose --profile app build
+          docker compose up --wait db
+          docker compose --profile app run --rm web python manage.py migrate --noinput
+          docker compose --profile app up -d --wait web scheduler
+          curl -fsS http://127.0.0.1:8000/healthz
+          curl -fsS http://127.0.0.1:8000/readyz
+          curl -fsS -o /dev/null http://127.0.0.1:8000/api/docs
+          docker compose --profile app exec -T scheduler python manage.py run_scheduled_jobs
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose --profile app logs
 
 
   frontend:

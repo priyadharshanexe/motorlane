@@ -32,6 +32,12 @@ services:
       MYSQL_PORT: 3306
     ports:
       - "127.0.0.1:${APP_PORT:-8000}:8000"
+    healthcheck:
+      # Liveness only; /readyz additionally checks the database and migrations.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     depends_on:
       db:
         condition: service_healthy

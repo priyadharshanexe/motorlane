@@ -28,7 +28,7 @@
   {% block main %}{% block content %}{% endblock %}{% endblock %}
 </main>
 <footer class="site-footer"><div class="container">Motorlane</div></footer>
-<script>
+<script nonce="{{ request.csp_nonce }}">
   document.addEventListener('pointerdown', function(event) {
     document.querySelectorAll('details[open]').forEach(function(menu) {
       if (!menu.contains(event.target)) menu.open = false;

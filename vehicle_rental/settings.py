@@ -20,6 +20,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
 
 
+def env_int(name, default):
+    """An integer from the environment, with a clear error instead of a bare ValueError."""
+    from django.core.exceptions import ImproperlyConfigured
+    value = os.getenv(name, str(default))
+    try:
+        return int(value)
+    except ValueError:
+        raise ImproperlyConfigured(f"{name} must be a whole number, got {value!r}.") from None
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -53,6 +63,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'vehicle_rental.security.ContentSecurityPolicyMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -94,6 +105,9 @@ DATABASES = {
         'PASSWORD': os.environ["MYSQL_PASSWORD"],
         'HOST': os.environ["MYSQL_HOST"],
         'PORT': os.environ["MYSQL_PORT"],
+        # Reuse connections across requests; health checks drop ones the server closed.
+        'CONN_MAX_AGE': env_int("DJANGO_CONN_MAX_AGE", 60),
+        'CONN_HEALTH_CHECKS': True,
     }
 }
 
@@ -163,7 +177,7 @@ EMAIL_BACKEND = os.getenv(
     else "django.core.mail.backends.smtp.EmailBackend",
 )
 EMAIL_HOST = os.getenv("DJANGO_EMAIL_HOST", "localhost")
-EMAIL_PORT = int(os.getenv("DJANGO_EMAIL_PORT", "587"))
+EMAIL_PORT = env_int("DJANGO_EMAIL_PORT", 587)
 EMAIL_USE_TLS = os.getenv("DJANGO_EMAIL_USE_TLS", "1") == "1"
 EMAIL_HOST_USER = os.getenv("DJANGO_EMAIL_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("DJANGO_EMAIL_PASSWORD", "")
@@ -171,7 +185,14 @@ DEFAULT_FROM_EMAIL = os.getenv("DJANGO_FROM_EMAIL", "Vehicle Rental <noreply@loc
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_SSL_REDIRECT = not DEBUG
-SECURE_HSTS_SECONDS = 3600 if not DEBUG else 0
+# HSTS for a year, including subdomains, and eligible for browser preload lists.
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+SECURE_REFERRER_POLICY = "same-origin"
+# Container probes call these over plain HTTP from inside the network.
+SECURE_REDIRECT_EXEMPT = [r"^healthz$", r"^readyz$"]
+CSP_REPORT_ONLY = os.getenv("DJANGO_CSP_REPORT_ONLY") == "1"
 if os.getenv("DJANGO_TRUST_HTTPS_PROXY") == "1":
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
@@ -195,13 +216,13 @@ HEADLESS_FRONTEND_URLS = {
 }
 
 # Rental policy. Every value can be overridden from the environment.
-RENTAL_TURNAROUND_MINUTES = int(os.getenv("RENTAL_TURNAROUND_MINUTES", "120"))
+RENTAL_TURNAROUND_MINUTES = env_int("RENTAL_TURNAROUND_MINUTES", 120)
 RENTAL_LONG_RENTAL_DISCOUNTS = (  # (minimum billable days, percent off), largest first
-    (30, int(os.getenv("RENTAL_MONTHLY_DISCOUNT_PERCENT", "20"))),
-    (7, int(os.getenv("RENTAL_WEEKLY_DISCOUNT_PERCENT", "10"))),
+    (30, env_int("RENTAL_MONTHLY_DISCOUNT_PERCENT", 20)),
+    (7, env_int("RENTAL_WEEKLY_DISCOUNT_PERCENT", 10)),
 )
-RENTAL_FREE_CANCELLATION_HOURS = int(os.getenv("RENTAL_FREE_CANCELLATION_HOURS", "48"))
-RENTAL_CANCELLATION_FEE_PERCENT = int(os.getenv("RENTAL_CANCELLATION_FEE_PERCENT", "20"))
+RENTAL_FREE_CANCELLATION_HOURS = env_int("RENTAL_FREE_CANCELLATION_HOURS", 48)
+RENTAL_CANCELLATION_FEE_PERCENT = env_int("RENTAL_CANCELLATION_FEE_PERCENT", 20)
 
 # Payments: Razorpay TEST mode when test keys are configured, otherwise a built-in fake
 # provider with the same interface. Live keys are refused (see rental/payments/).
@@ -227,4 +248,18 @@ SPECTACULAR_SETTINGS = {
     "SWAGGER_UI_DIST": "SIDECAR",
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
     "REDOC_DIST": "SIDECAR",
+}
+
+# Logging: JSON lines (one object per line) by default outside debug, readable text in debug.
+LOG_FORMAT = os.getenv("DJANGO_LOG_FORMAT", "text" if DEBUG else "json")
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {"()": "vehicle_rental.log_format.JsonFormatter"},
+        "text": {"format": "{asctime} {levelname} {name} {message}", "style": "{"},
+    },
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": LOG_FORMAT}},
+    "root": {"handlers": ["console"], "level": os.getenv("DJANGO_LOG_LEVEL", "INFO")},
+    "loggers": {"django.db.backends": {"level": "WARNING"}},
 }
