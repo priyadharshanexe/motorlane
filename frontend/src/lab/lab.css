@@ -13,9 +13,9 @@
   transition: background-color .4s ease, color .4s ease;
 }
 .lab[data-theme="light"] {
-  --tarmac: #F3F1EC; --raised: #FFFFFF; --kerb: #D9D5CC; --chalk: #16181B; --dust: #5A5E66; --lane-text: #7A5600;
-  --asphalt: #2A2D32; --ghost: #B9B4AA; --pending: #7A5600; --confirmed: #0B5CA8; --progress: #0E7A4E;
-  --weekend: #8A4B00; --deposit: #0B5CA8; --wheel: #16181B;
+  --tarmac: #F3F1EC; --raised: #FFFFFF; --kerb: #D9D5CC; --chalk: #16181B; --dust: #5A5E66; --lane-text: #946000;
+  --asphalt: #74777C; --ghost: #B9B4AA; --pending: #946000; --confirmed: #0B5CA8; --progress: #0E7A4E;
+  --weekend: #8A4B00; --deposit: #0B5CA8; --wheel: #FFFFFF;
 }
 .lab *, .lab *::before, .lab *::after { box-sizing: border-box; }
 .lab h1, .lab h2, .lab h3, .lab p, .lab ol { margin: 0; padding: 0; }
