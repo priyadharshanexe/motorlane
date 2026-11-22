@@ -106,7 +106,8 @@ class QuoteAndBookingApiTests(TestCase):
         }, secure=True)
         self.assertEqual(response.status_code, 201, response.content)
         booking = Booking.objects.get()
-        self.assertEqual(booking.price_breakdown, quote)
+        self.assertEqual(booking.price_breakdown, {k: v for k, v in quote.items()
+                                                   if k not in ("available", "unavailable_reason", "earliest_pickup")})
         self.assertEqual((booking.total_price, booking.deposit_amount), (Decimal("2400.00"), Decimal("3000.00")))
         self.assertEqual((booking.pickup_time, booking.return_time), (time(10), time(10)))
 
@@ -130,9 +131,9 @@ class TurnaroundTests(TestCase):
                                day or self.day, day or self.day, start, end)
 
     def test_same_day_rentals_need_the_cleaning_buffer(self):
-        with self.assertRaisesMessage(forms.ValidationError, "already booked"):
+        with self.assertRaisesMessage(forms.ValidationError, "cleaning window after the previous rental"):
             self.reserve(time(13), time(15))
-        with self.assertRaisesMessage(forms.ValidationError, "already booked"):
+        with self.assertRaisesMessage(forms.ValidationError, "cleaning window before the next rental"):
             self.reserve(time(6), time(8))
         self.assertEqual(self.reserve(time(14), time(18)).status, "Pending")
 
@@ -145,7 +146,7 @@ class TurnaroundTests(TestCase):
         late.status = Booking.Status.CANCELLED
         late.save()
         schedule_maintenance(self.vehicle, next_day, next_day, "Service")
-        with self.assertRaisesMessage(forms.ValidationError, "maintenance"):
+        with self.assertRaisesMessage(forms.ValidationError, "cleaning window before scheduled maintenance"):
             reserve_vehicle(make_profile("blocked").pk, self.vehicle.pk, self.day, self.day, time(18), time(22, 30))
 
     def test_search_hides_vehicles_inside_the_buffer(self):
@@ -155,3 +156,52 @@ class TurnaroundTests(TestCase):
         free = {**busy, "pickup_time": "14:00", "return_time": "16:00"}
         self.assertEqual(self.client.get(url, busy, secure=True).json()["results"], [])
         self.assertEqual(len(self.client.get(url, free, secure=True).json()["results"]), 1)
+
+
+@override_settings(RENTAL_TURNAROUND_MINUTES=120)
+class CleaningWindowMessageTests(TestCase):
+    """Buffer-only conflicts explain the cleaning window and suggest the earliest workable pickup."""
+
+    def setUp(self):
+        self.vehicle = Vehicle.objects.create(name="Bike", vehicle_type="Bike", price_per_day=500)
+        self.day = timezone.localdate() + timedelta(days=6)
+        reserve_vehicle(make_profile("first-rental").pk, self.vehicle.pk, self.day, self.day, time(9), time(14))
+        self.renter = make_profile("next-renter")
+
+    def book(self, start, end):
+        self.client.force_login(self.renter.user)
+        return self.client.post(reverse("api_bookings"), {
+            "vehicle_id": self.vehicle.pk, "start_date": self.day, "end_date": self.day, "pickup_time": start,
+            "return_time": end, "contact_name": "R", "contact_phone": "+91 99999 00000", "accepted_conditions": True,
+        }, secure=True)
+
+    def test_pickup_too_soon_after_the_previous_rental_names_the_earliest_pickup(self):
+        response = self.book("15:00", "17:00")
+        self.assertEqual(response.status_code, 409)
+        label = f"16:00 on {self.day.day} {self.day:%b}"
+        self.assertEqual(response.json()["detail"],
+                         f"This vehicle needs a 2-hour cleaning window after the previous rental: earliest pickup is {label}.")
+        self.assertTrue(response.json()["earliest_pickup"].startswith(f"{self.day.isoformat()}T16:00:00"))
+        self.assertEqual(self.book("16:00", "18:00").status_code, 201)
+
+    def test_return_too_close_to_the_next_rental_names_the_latest_return(self):
+        later = make_profile("later")
+        reserve_vehicle(later.pk, self.vehicle.pk, self.day, self.day, time(19), time(22))
+        response = self.book("16:00", "18:00")
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("cleaning window before the next rental: return by 17:00", response.json()["detail"])
+
+    def test_a_real_overlap_keeps_the_plain_message_but_still_suggests_a_time(self):
+        response = self.book("10:00", "12:00")
+        self.assertEqual(response.json()["detail"], "Vehicle already booked for these dates.")
+        self.assertTrue(response.json()["earliest_pickup"].startswith(f"{self.day.isoformat()}T16:00:00"))
+
+    def test_quote_reports_availability_and_the_suggestion(self):
+        url = reverse("api_quote", args=[self.vehicle.pk])
+        params = {"start_date": self.day, "end_date": self.day, "pickup_time": "15:00", "return_time": "17:00"}
+        busy = self.client.get(url, params, secure=True).json()
+        self.assertFalse(busy["available"])
+        self.assertIn("cleaning window", busy["unavailable_reason"])
+        self.assertTrue(busy["earliest_pickup"].startswith(f"{self.day.isoformat()}T16:00:00"))
+        free = self.client.get(url, {**params, "pickup_time": "16:30", "return_time": "18:00"}, secure=True).json()
+        self.assertEqual((free["available"], free["earliest_pickup"]), (True, None))

@@ -43,7 +43,10 @@ class BookingCreationThrottle(UserRateThrottle):
 
 
 def conflict(error):
-    return Response({"detail": error.messages[0]}, status=status.HTTP_409_CONFLICT)
+    body = {"detail": error.messages[0]}
+    if getattr(error, "earliest_pickup", None):
+        body["earliest_pickup"] = timezone.localtime(error.earliest_pickup).isoformat()
+    return Response(body, status=status.HTTP_409_CONFLICT)
 
 
 @never_cache
@@ -345,7 +348,14 @@ def quote(request, pk):
         quote = price_rental(vehicle, *form.window)
     except ValidationError as error:
         return conflict(error)
-    return Response(quote.as_dict())
+    from .services.availability import Unavailable, check_availability
+    body = {**quote.as_dict(), "available": True, "unavailable_reason": None, "earliest_pickup": None}
+    try:
+        check_availability(vehicle, *form.window)
+    except Unavailable as problem:
+        body.update(available=False, unavailable_reason=problem.message, earliest_pickup=(
+            timezone.localtime(problem.earliest_pickup).isoformat() if problem.earliest_pickup else None))
+    return Response(body)
 
 
 @schema.favorites_list

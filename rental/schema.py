@@ -37,6 +37,9 @@ Quote = inline_serializer("Quote", {
     "deposit": s.DecimalField(max_digits=10, decimal_places=2, help_text="Refundable; returned after the rental."),
     "due_now": s.DecimalField(max_digits=10, decimal_places=2, help_text="Charged at payment: rental plus deposit."),
     "total_price": s.DecimalField(max_digits=10, decimal_places=2, help_text="Same as rental_total (older clients)."),
+    "available": s.BooleanField(help_text="Whether the window is free, cleaning buffer included."),
+    "unavailable_reason": s.CharField(allow_null=True),
+    "earliest_pickup": s.DateTimeField(allow_null=True, help_text="When unavailable: the earliest pickup that fits the same rental length."),
 })
 WINDOW = [
     OpenApiParameter("start_date", OpenApiTypes.DATE, required=True, description="Pickup date."),

@@ -49,7 +49,9 @@ class ReservationConcurrencyTests(TransactionTestCase):
         results = self.reserve_in_parallel(
             [(renter.pk, vehicle.pk) for renter in renters], times=slots,
         )
-        self.assertCountEqual(results, ["reserved", "Vehicle already booked for these dates."])
+        self.assertIn("reserved", results)
+        refused = next(result for result in results if result != "reserved")
+        self.assertIn("2-hour cleaning window", refused)
         self.assertEqual(Booking.objects.filter(vehicle=vehicle).count(), 1)
 
     @skipUnlessDBFeature("has_select_for_update")

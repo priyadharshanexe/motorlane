@@ -30,6 +30,9 @@ export interface Quote {
   deposit: string
   due_now: string
   total_price: string
+  available?: boolean
+  unavailable_reason?: string | null
+  earliest_pickup?: string | null
 }
 
 /** The server's line-by-line quote (weekday/weekend days, long-rental discount, refundable deposit). */

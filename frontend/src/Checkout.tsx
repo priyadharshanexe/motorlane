@@ -207,6 +207,26 @@ export function Checkout() {
           {quote.isPending && <Busy />}
           <Notice error={quote.error} />
           {quote.data && <QuoteLines quote={quote.data} />}
+          {quote.data && quote.data.available === false && (
+            <div className="availability-warning" role="alert">
+              <p>{quote.data.unavailable_reason}</p>
+              {quote.data.earliest_pickup && (
+                <button type="button" className="secondary" onClick={() => {
+                  // Keep the rental length and move pickup (and the dates, if needed) to the suggestion.
+                  const pickup = new Date(quote.data!.earliest_pickup!);
+                  const shift = pickup.getTime() - new Date(`${start}T${pickupTime}:00+05:30`).getTime();
+                  const dropoff = new Date(new Date(`${end}T${returnTime}:00+05:30`).getTime() + shift);
+                  const [pickupDate, newPickup] = kolkata(pickup), [returnDate, newReturn] = kolkata(dropoff);
+                  setPickupTime(newPickup);
+                  setReturnTime(newReturn);
+                  const next = new URLSearchParams({ start_date: pickupDate, end_date: returnDate, pickup_time: newPickup, return_time: newReturn });
+                  navigate(`/checkout/${id}?${next}`, { replace: true });
+                }}>
+                  Use the earliest available pickup
+                </button>
+              )}
+            </div>
+          )}
           <div className="payment-note">
             <strong>No payment collected now</strong>
             <p>
@@ -248,7 +268,7 @@ export function Checkout() {
               </span>
             </label>
             <Notice error={write.error} />
-            <button disabled={!accepted || !quote.data || write.isPending}>
+            <button disabled={!accepted || !quote.data || quote.data.available === false || write.isPending}>
               {write.isPending ? "Sending request…" : "Confirm & send request"}
             </button>
           </form>
@@ -260,4 +280,12 @@ export function Checkout() {
       </div>
     </>
   );
+}
+
+/** [YYYY-MM-DD, HH:MM] of an instant in the marketplace's time zone (Asia/Kolkata). */
+function kolkata(moment: Date): [string, string] {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(moment).map(part => [part.type, part.value]));
+  return [`${parts.year}-${parts.month}-${parts.day}`, `${parts.hour}:${parts.minute}`];
 }

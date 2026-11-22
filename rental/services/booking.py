@@ -9,7 +9,7 @@ from django.utils import timezone
 from ..forms import rental_window
 from ..models import Booking, Profile, Vehicle
 from ..selectors import active_bookings
-from .availability import availability_problem
+from .availability import Unavailable, check_availability
 from .events import record_event
 from .notifications import notify
 from .pricing import price_rental
@@ -33,8 +33,12 @@ def reserve_vehicle(user_id, vehicle_id, start_date, end_date, pickup_time=None,
     if active.filter(user_id=user_id).count() >= 3:
         raise forms.ValidationError("You can only have 3 active bookings at a time.")
     pickup_at, return_at = rental_window(start_date, end_date, pickup_time, return_time)
-    if problem := availability_problem(vehicle, pickup_at, return_at):
-        raise forms.ValidationError(problem)
+    try:
+        check_availability(vehicle, pickup_at, return_at)
+    except Unavailable as problem:
+        error = forms.ValidationError(problem.message)
+        error.earliest_pickup = problem.earliest_pickup
+        raise error from None
     quote = price_rental(vehicle, pickup_at, return_at)
     booking = Booking.objects.create(
         user_id=user_id, vehicle=vehicle, start_date=start_date, end_date=end_date,
