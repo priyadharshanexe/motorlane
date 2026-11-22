@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 logger = logging.getLogger(__name__)
 
 # Every job here must be idempotent: the scheduler may run them again at any time.
-JOBS = ["expire_bookings", "send_pickup_reminders"]
+JOBS = ["expire_bookings", "send_pickup_reminders", "send_notifications", "process_refunds", "reconcile_refunds"]
 
 
 class Command(BaseCommand):

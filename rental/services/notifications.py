@@ -1,15 +1,19 @@
-"""Booking emails, sent through the configured email backend (console in development).
+"""Booking emails through a persistent outbox.
 
-Every message is queued with `transaction.on_commit`, so nothing is sent for a change that
-rolls back, and a mail server failure never undoes a booking change: it is logged instead.
+`notify()` renders the message and stores it in `NotificationOutbox` inside the current
+transaction, so an email exists if and only if the booking change committed. Delivery runs
+after commit (`deliver`), and the scheduler's `send_notifications` job retries anything
+still pending with backoff, so a mail server outage delays emails instead of losing them.
 Each kind has a plain-text and an HTML template under `templates/rental/emails/`.
 """
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.template.loader import render_to_string
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -24,41 +28,84 @@ MESSAGES = {
     "return_received": ("renter", "We received your {vehicle} back"),
     "review_request": ("renter", "How was your {vehicle} rental?"),
 }
+RETRY_DELAYS = [timedelta(minutes=m) for m in (1, 5, 15, 60, 240)]
+MAX_ATTEMPTS = len(RETRY_DELAYS) + 1
 
 
-def notify(kind, booking, **extra):
-    """Queue one email about `booking`, sent after the current transaction commits."""
+def notify(kind, booking, dedupe_key=None, **extra):
+    """Render and queue one email about `booking`. Returns the outbox row, or None if skipped.
+
+    Enqueueing the same `dedupe_key` twice keeps the first message only.
+    """
+    from ..models import Booking, NotificationOutbox
+
     if kind not in MESSAGES:
         raise ValueError(f"Unknown notification {kind}")
-    booking_id = booking.pk
-    transaction.on_commit(lambda: send_now(kind, booking_id, **extra))
-
-
-def send_now(kind, booking_id, **extra):
-    from ..models import Booking
-
-    booking = Booking.objects.select_related("vehicle__owner__user", "user__user").get(pk=booking_id)
+    booking = Booking.objects.select_related("vehicle__owner__user", "user__user").get(pk=booking.pk)
     role, subject = MESSAGES[kind]
     profile = booking.user if role == "renter" else booking.vehicle.owner
     recipient = getattr(getattr(profile, "user", None), "email", "")
     if not recipient:
-        logger.info("notification_skipped kind=%s booking_id=%s reason=no_email", kind, booking_id)
-        return False
+        logger.info("notification_skipped kind=%s booking_id=%s reason=no_email", kind, booking.pk)
+        return None
     context = {
         "booking": booking, "vehicle": booking.vehicle, "recipient_name": profile.name,
         "renter_name": booking.contact_name or booking.user.name, "site_url": settings.SITE_URL.rstrip("/"),
         **extra,
     }
-    message = EmailMultiAlternatives(
-        subject=subject.format(vehicle=booking.vehicle.name),
-        body=render_to_string(f"rental/emails/{kind}.txt", context),
-        to=[recipient],
-    )
-    message.attach_alternative(render_to_string(f"rental/emails/{kind}.html", context), "text/html")
     try:
-        message.send()
-    except Exception:
-        logger.exception("notification_failed kind=%s booking_id=%s", kind, booking_id)
-        return False
-    logger.info("notification_sent kind=%s booking_id=%s", kind, booking_id)
+        with transaction.atomic():
+            message = NotificationOutbox.objects.create(
+                kind=kind, booking=booking, dedupe_key=dedupe_key or f"{kind}:{booking.pk}", to=recipient,
+                subject=subject.format(vehicle=booking.vehicle.name),
+                body_text=render_to_string(f"rental/emails/{kind}.txt", context),
+                body_html=render_to_string(f"rental/emails/{kind}.html", context),
+            )
+    except IntegrityError:
+        logger.info("notification_duplicate kind=%s booking_id=%s", kind, booking.pk)
+        return None
+    transaction.on_commit(lambda: deliver(message.pk))
+    return message
+
+
+def deliver(message_id, now=None):
+    """Try to send one due message. Returns True when it was sent by this call."""
+    from ..models import Booking, NotificationOutbox
+
+    now = now or timezone.now()
+    with transaction.atomic():
+        # The row lock is held while sending, so two workers never send the same message at once.
+        message = (NotificationOutbox.objects.select_for_update(skip_locked=True)
+                   .filter(pk=message_id, status=NotificationOutbox.Status.PENDING, next_attempt_at__lte=now).first())
+        if message is None:
+            return False
+        message.attempts += 1
+        email = EmailMultiAlternatives(subject=message.subject, body=message.body_text, to=[message.to])
+        if message.body_html:
+            email.attach_alternative(message.body_html, "text/html")
+        try:
+            email.send()
+        except Exception as error:  # any transport error: retry later
+            give_up = message.attempts >= MAX_ATTEMPTS
+            message.status = NotificationOutbox.Status.FAILED if give_up else NotificationOutbox.Status.PENDING
+            message.next_attempt_at = now + RETRY_DELAYS[min(message.attempts, len(RETRY_DELAYS)) - 1]
+            message.last_error = f"{type(error).__name__}: {error}"[:255]
+            message.save(update_fields=["status", "attempts", "next_attempt_at", "last_error"])
+            logger.exception("notification_failed kind=%s booking_id=%s attempt=%s give_up=%s",
+                             message.kind, message.booking_id, message.attempts, give_up)
+            return False
+        message.status, message.sent_at, message.last_error = NotificationOutbox.Status.SENT, now, ""
+        message.save(update_fields=["status", "attempts", "sent_at", "last_error"])
+        if message.kind == "pickup_reminder" and message.booking_id:
+            # Only a delivered reminder counts as sent; a failed one stays due for retry.
+            Booking.objects.filter(pk=message.booking_id).update(reminder_sent_at=now)
+    logger.info("notification_sent kind=%s booking_id=%s attempt=%s", message.kind, message.booking_id, message.attempts)
     return True
+
+
+def deliver_due(now=None):
+    from ..models import NotificationOutbox
+
+    now = now or timezone.now()
+    due = NotificationOutbox.objects.filter(status=NotificationOutbox.Status.PENDING, next_attempt_at__lte=now)
+    return sum(deliver(pk, now) for pk in due.order_by("next_attempt_at", "pk").values_list("pk", flat=True))
