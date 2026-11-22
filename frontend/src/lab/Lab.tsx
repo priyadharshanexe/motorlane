@@ -503,7 +503,7 @@ function HowItWorks() {
     };
     if (reducedMotion()) { place(1); return; }
     place(0);
-    const trigger = ScrollTrigger.create({ trigger: section.current, start: "top 80%", end: "bottom 25%", scrub: 0.6,
+    const trigger = ScrollTrigger.create({ trigger: road.current!.ownerSVGElement, start: "center 85%", end: "center 30%", scrub: 0.6,  // the whole road stays in view
       onUpdate: self => place(self.progress) });
     let flow = 0;
     const stopFlow = onDrive(dt => {
@@ -605,7 +605,10 @@ function TimelineRoad({ stops }: { stops: { label: string; time: string; color: 
     };
     if (reducedMotion()) { render(1); return; }
     render(0);
-    const trigger = ScrollTrigger.create({ trigger: wrapper.current, start: "top 75%", end: "top 35%", scrub: 0.6,
+    // The road's drawn tip follows the reader's eye line (60% down the viewport): drawing starts when the top of the
+    // road reaches it and finishes as the Return stop does, whatever the viewport height.
+    const svg = wrapper.current!.querySelector("svg");
+    const trigger = ScrollTrigger.create({ trigger: svg, start: "top 60%", end: "bottom 60%", scrub: 0.6,
       onUpdate: self => render(self.progress) });
     return () => trigger.kill();
   }, []);
