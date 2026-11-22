@@ -10,6 +10,8 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import "@fontsource/noto-sans-tamil/700.css";
+import "@fontsource-variable/archivo/wdth.css";
 import { drive } from "./drive";
 
 const NEAR = 4;  // camera z; objects recycle from here back to NEAR - period
@@ -121,6 +123,73 @@ const gopuram = () => {
   return silhouette([...left, -1.4, height + 1.6, -0.6, height + 2.2, 0, height + 3, 0.6, height + 2.2, 1.4, height + 1.6, ...right]);
 };
 
+// ----- Tamil Nadu highway direction signs -----------------------------------------------------------------------
+// Green boards with a white border, Tamil above English, white arrows and distances, drawn on a canvas with the
+// self-hosted Noto Sans Tamil and Archivo. One overhead gantry the camera drives under, and one smaller roadside
+// board on a single post; both recycle like the rest of the scenery and swap destinations while far away.
+const TAMIL: Record<string, string> = {
+  Chennai: "சென்னை", Coimbatore: "கோயம்புத்தூர்", Madurai: "மதுரை", Tiruchirappalli: "திருச்சிராப்பள்ளி",
+  Trichy: "திருச்சி", Salem: "சேலம்", Erode: "ஈரோடு", Tirunelveli: "திருநெல்வேலி", Vellore: "வேலூர்",
+  Thanjavur: "தஞ்சாவூர்", Kanyakumari: "கன்னியாகுமரி", Tiruppur: "திருப்பூர்", Thoothukudi: "தூத்துக்குடி",
+  Dindigul: "திண்டுக்கல்", Hosur: "ஓசூர்", Kanchipuram: "காஞ்சிபுரம்", Puducherry: "புதுச்சேரி", Ooty: "ஊட்டி",
+};
+const SIGN_FALLBACK = ["Madurai", "Coimbatore", "Tiruchirappalli", "Salem", "Chennai", "Erode", "Tirunelveli", "Vellore"];
+const SIGN_GREEN = "#0B6B3A";
+type Arrow = "left" | "up" | "right";
+
+function drawArrow(g: CanvasRenderingContext2D, x: number, y: number, size: number, dir: Arrow) {
+  g.save();
+  g.translate(x, y);
+  g.rotate(dir === "left" ? -Math.PI / 2 : dir === "right" ? Math.PI / 2 : 0);
+  const w = size * 0.18;
+  g.beginPath();
+  g.moveTo(0, -size / 2); g.lineTo(size * 0.42, -size * 0.06); g.lineTo(w, -size * 0.06); g.lineTo(w, size / 2);
+  g.lineTo(-w, size / 2); g.lineTo(-w, -size * 0.06); g.lineTo(-size * 0.42, -size * 0.06); g.closePath();
+  g.fill();
+  g.restore();
+}
+
+/** One sign as two textures: the board (green, border, text) and a "retroreflective" layer with only the white
+ *  parts on transparent, which glows at night. Destinations are [English name, km, arrow]. */
+function signTextures(width: number, height: number, header: string, destinations: [string, number, Arrow][]) {
+  const make = (withBoard: boolean) => {
+    const canvas = Object.assign(document.createElement("canvas"), { width, height });
+    const g = canvas.getContext("2d")!;
+    if (withBoard) { g.fillStyle = SIGN_GREEN; g.fillRect(0, 0, width, height); }
+    const inset = height * 0.045, radius = height * 0.06;
+    g.strokeStyle = "#FFFFFF"; g.lineWidth = height * 0.022;
+    g.beginPath(); g.roundRect(inset, inset, width - inset * 2, height - inset * 2, radius); g.stroke();
+    g.fillStyle = "#FFFFFF"; g.textAlign = "center"; g.textBaseline = "alphabetic";
+    if (header) {
+      g.font = `700 ${Math.round(height * 0.075)}px "Archivo Variable", "Archivo", sans-serif`;
+      g.fillText(header, width / 2, height * 0.16);
+      g.fillRect(width * 0.08, height * 0.2, width * 0.84, height * 0.008);
+    }
+    const columns = destinations.length, colWidth = (width - inset * 4) / columns, top = header ? height * 0.24 : height * 0.08;
+    destinations.forEach(([name, km, arrow], i) => {
+      const cx = inset * 2 + colWidth * (i + 0.5), span = colWidth * 0.86;
+      const fit = (text: string, font: string, y: number) => {
+        g.font = font;
+        const scale = Math.min(1, span / Math.max(1, g.measureText(text).width));
+        g.save(); g.translate(cx, y); g.scale(scale, 1); g.fillText(text, 0, 0); g.restore();
+      };
+      const unit = height - top;
+      drawArrow(g, cx, top + unit * 0.2, unit * 0.26, arrow);
+      fit(TAMIL[name] ?? name, `700 ${Math.round(unit * 0.15)}px "Noto Sans Tamil", sans-serif`, top + unit * 0.53);
+      fit(name, `700 ${Math.round(unit * 0.14)}px "Archivo Variable", "Archivo", sans-serif`, top + unit * 0.72);
+      fit(`${km} km`, `600 ${Math.round(unit * 0.11)}px "Archivo Variable", "Archivo", sans-serif`, top + unit * 0.88);
+    });
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 8;
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    return texture;
+  };
+  return { board: make(true), glow: make(false) };
+}
+
+const GANTRY_PERIOD = 152, BOARD_PERIOD = 152;
 const DASHES = 38, DASH_SPACING = 4;  // tight enough that a dash is always in the bottom of the frame
 const MILESTONES = 5, MILE_SPACING = 32;
 const RAIL_POSTS = 76, RAIL_POST_SPACING = 4, RAIL_X = 5.05;  // posts every 2 units per side
@@ -160,12 +229,47 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
   const mileGroup = useRef<THREE.Group>(null), ridgeA = useRef<THREE.Group>(null), ridgeB = useRef<THREE.Group>(null);
   const templeMesh = useRef<THREE.Mesh>(null);
   const travel = useRef(0);
+
+  // Direction signs: wait for the sign fonts (so the canvas never draws a fallback font), then build a few
+  // destination sets from the catalog's real cities (with known Tamil names) and rotate through them.
+  const [fontsReady, setFontsReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      document.fonts.load('700 64px "Noto Sans Tamil"', "சென்னை"),
+      document.fonts.load('700 64px "Archivo Variable"'),
+    ]).catch(() => undefined).finally(() => { if (alive) setFontsReady(true); });
+    return () => { alive = false; };
+  }, []);
+  const signKey = places.filter(p => TAMIL[p]).join("|");
+  const signs = useMemo(() => {
+    if (!fontsReady || new URLSearchParams(location.search).has("nosigns")) return null;  // ?nosigns: A/B performance checks
+    const towns = [...new Set([...signKey.split("|").filter(Boolean), ...SIGN_FALLBACK])].slice(0, 9);
+    const km = (town: string, i: number) => 18 + ((town.length * 41 + i * 67) % 260);
+    const gantries = [0, 1, 2].map(set => {
+      const pick = [0, 1, 2].map(i => towns[(set * 3 + i) % towns.length]);
+      return signTextures(1536, 560, "NH 44 · TAMIL NADU", [[pick[0], km(pick[0], 0), "left"], [pick[1], km(pick[1], 1), "up"], [pick[2], km(pick[2], 2), "right"]]);
+    });
+    const boards = towns.slice(0, 4).map((town, i) => signTextures(640, 400, "", [[town, km(town, i + 5), i % 2 ? "up" : "right"]]));
+    return { gantries, boards };
+  }, [fontsReady, signKey]);
+  const { gl } = useThree();
+  useEffect(() => {
+    if (!signs) return;
+    // Upload every sign texture to the GPU once, now, so swapping destinations later costs nothing mid-drive.
+    signs.gantries.concat(signs.boards).forEach(t => { gl.initTexture(t.board); gl.initTexture(t.glow); });
+    return () => signs.gantries.concat(signs.boards).forEach(t => { t.board.dispose(); t.glow.dispose(); });
+  }, [signs, gl]);
+  const gantry = useRef<THREE.Group>(null), board = useRef<THREE.Group>(null);
+  const gantryFace = useRef<THREE.Mesh>(null), gantryGlow = useRef<THREE.Mesh>(null);
+  const boardFace = useRef<THREE.Mesh>(null), boardGlow = useRef<THREE.Mesh>(null);
+  const signCycle = useRef({ gantryZ: 0, gantryN: 0, boardZ: 0, boardN: 0 });
   // r3f aims the default camera at the origin, pitching it ~17 degrees down: the horizon rides high, the road fills
   // the frame and near dash gaps look huge. Look level down the road instead, with the horizon near mid-frame.
   useEffect(() => { camera.lookAt(0, 1.0, -40); }, [camera]);
   useEffect(() => {  // ?debug exposes the scene to the pop-in/pop-out check in walkthrough/popcheck.js
     if (!new URLSearchParams(location.search).has("debug")) return;
-    (window as unknown as { __labRoad: unknown }).__labRoad = { camera, meshes: { railPosts, trunks, canopies, poles, lamps, pools, cones, rows, dashes }, stones: mileGroup };
+    (window as unknown as { __labRoad: unknown }).__labRoad = { camera, meshes: { railPosts, trunks, canopies, poles, lamps, pools, cones, rows, dashes }, stones: mileGroup, gantry, board };
   });
   useEffect(() => {  // palm fronds in two greens, alternating, so crowns read as leaves rather than one flat colour
     const mesh = fronds.current; if (!mesh) return;
@@ -260,6 +364,24 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
     }
     all.forEach(ref => { if (ref.current) ref.current.instanceMatrix.needsUpdate = true; });
 
+    if (signs) {
+      // Signs swap destinations when they wrap from behind the camera back to the horizon, out of sight.
+      const c = signCycle.current, grow = (z: number) => Math.min(1, Math.max(0.001, (z + FAR - 2) / 24));
+      const swap = (face: THREE.Mesh | null, glow: THREE.Mesh | null, set: { board: THREE.Texture; glow: THREE.Texture }) => {
+        // Same material, only the map changes: no shader recompile (the textures were uploaded up front).
+        if (face) (face.material as THREE.MeshBasicMaterial).map = set.board;
+        if (glow) (glow.material as THREE.MeshBasicMaterial).map = set.glow;
+      };
+      const gz = zOf(0, 0, GANTRY_PERIOD, s + 60);
+      if (gz < c.gantryZ - 1) { c.gantryN = (c.gantryN + 1) % signs.gantries.length; swap(gantryFace.current, gantryGlow.current, signs.gantries[c.gantryN]); }
+      c.gantryZ = gz;
+      if (gantry.current) { gantry.current.position.z = gz; gantry.current.scale.setScalar(grow(gz)); }
+      const bz = zOf(0, 0, BOARD_PERIOD, s + 136);
+      if (bz < c.boardZ - 1) { c.boardN = (c.boardN + 1) % signs.boards.length; swap(boardFace.current, boardGlow.current, signs.boards[c.boardN]); }
+      c.boardZ = bz;
+      if (board.current) { board.current.position.z = bz; board.current.scale.setScalar(grow(bz)); }
+    }
+
     // Far layer: the ridge and the gopuram drift slowly sideways (a long bend in the road), wrapping seamlessly.
     const drift = (s * 0.05) % RIDGE_W;
     if (ridgeA.current) ridgeA.current.position.x = -drift;
@@ -339,6 +461,41 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
         <planeGeometry args={[1, 1]} />
         <meshBasicMaterial color={colors.pool} alphaMap={blob} transparent opacity={colors.poolOpacity} blending={THREE.AdditiveBlending} depthWrite={false} />
       </instancedMesh>
+      {signs && (
+        <>
+          {/* Overhead gantry: two grey steel posts, a truss beam and the board, high enough to drive under. */}
+          <group ref={gantry}>
+            {[-1, 1].map(side => (
+              <mesh key={side} position={[side * 5.7, 3.1, 0]}><boxGeometry args={[0.28, 6.2, 0.28]} /><Lit color={light ? "#AEB4BA" : "#3C4148"} light={light} /></mesh>
+            ))}
+            <mesh position={[0, 6.05, -0.12]}><boxGeometry args={[11.8, 0.22, 0.22]} /><Lit color={light ? "#AEB4BA" : "#3C4148"} light={light} /></mesh>
+            <mesh position={[0, 4.3, -0.12]}><boxGeometry args={[11.8, 0.16, 0.16]} /><Lit color={light ? "#AEB4BA" : "#3C4148"} light={light} /></mesh>
+            <mesh ref={gantryFace} position={[0, 5.15, 0]}>
+              <planeGeometry args={[9.2, 9.2 * 560 / 1536]} />
+              {light ? <meshLambertMaterial map={signs.gantries[0].board} /> : <meshBasicMaterial map={signs.gantries[0].board} color="#5E6B64" />}
+            </mesh>
+            {/* At night the white letters and border are retroreflective: they catch the light and glow softly. */}
+            <mesh ref={gantryGlow} position={[0, 5.15, 0.01]} visible={!light}>
+              <planeGeometry args={[9.2, 9.2 * 560 / 1536]} />
+              <meshBasicMaterial map={signs.gantries[0].glow} transparent opacity={0.85} color="#FFF4DA" toneMapped={false} depthWrite={false} />
+            </mesh>
+          </group>
+          {/* A smaller direction board on a single post, on the left verge beyond the rail. */}
+          <group ref={board}>
+            <mesh position={[-6.6, 1.3, 0]}><boxGeometry args={[0.14, 2.6, 0.14]} /><Lit color={light ? "#AEB4BA" : "#3C4148"} light={light} /></mesh>
+            <group position={[-6.6, 2.9, 0.08]} rotation-y={0.35}>
+              <mesh ref={boardFace}>
+                <planeGeometry args={[2.4, 1.5]} />
+                {light ? <meshLambertMaterial map={signs.boards[0].board} /> : <meshBasicMaterial map={signs.boards[0].board} color="#5E6B64" />}
+              </mesh>
+              <mesh ref={boardGlow} position={[0, 0, 0.01]} visible={!light}>
+                <planeGeometry args={[2.4, 1.5]} />
+                <meshBasicMaterial map={signs.boards[0].glow} transparent opacity={0.85} color="#FFF4DA" toneMapped={false} depthWrite={false} />
+              </mesh>
+            </group>
+          </group>
+        </>
+      )}
       <group ref={mileGroup}>
         {milestones.map((texture, i) => (
           <group key={i} position={[6.4, 0, -i * MILE_SPACING]} rotation-y={-0.5}>
