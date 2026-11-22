@@ -426,7 +426,11 @@ def payment_fake_checkout(request, pk):
     """Fake provider only: stands in for the checkout widget and returns a signed result."""
     from .models import Payment
     from .payments.providers import FakeProvider, get_provider
-    provider = get_provider()
+    from django.core.exceptions import ImproperlyConfigured
+    try:
+        provider = get_provider()
+    except ImproperlyConfigured:
+        raise Http404 from None  # the demo checkout does not exist unless demo payments are allowed
     if not isinstance(provider, FakeProvider):
         raise Http404
     booking = renter_booking_locked(request.user, pk)

@@ -243,7 +243,10 @@ PAYMENT_WEBHOOK_SECRET = os.getenv("PAYMENT_WEBHOOK_SECRET", "")
 PAYMENT_CURRENCY = "INR"
 SITE_URL = os.getenv("SITE_URL", "http://localhost:8000")
 
-REST_FRAMEWORK = {"DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema"}
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "rental.api_errors.api_exception_handler",
+}
 SPECTACULAR_SETTINGS = {
     "TITLE": "Motorlane API",
     "DESCRIPTION": (

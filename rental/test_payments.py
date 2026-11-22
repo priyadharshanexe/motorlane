@@ -390,3 +390,41 @@ class RefundIntentTests(TestCase):
         sent.refresh_from_db()
         self.assertEqual(sent.status, "succeeded")
         self.assertIn("succeeded 1", out.getvalue())
+
+
+class ProductionPaymentGuardTests(TestCase):
+    """With DEBUG off and no demo flag, the fake provider cannot be reached in any way."""
+
+    def setUp(self):
+        self.renter = make_profile("guard-renter")
+        vehicle = Vehicle.objects.create(name="Car", vehicle_type="Car", price_per_day=1000)
+        day = timezone.localdate() + timedelta(days=5)
+        self.booking = reserve_vehicle(self.renter.pk, vehicle.pk, day, day)
+        Booking.objects.filter(pk=self.booking.pk).update(status=Booking.Status.CONFIRMED)
+        Payment.objects.create(booking=self.booking, provider="fake", order_id="fake_order_guard", amount=1000)
+        self.client.force_login(self.renter.user)
+
+    @override_settings(PAYMENT_PROVIDER="fake", DEBUG=False, DEMO_MODE=False)
+    def test_fake_checkout_is_unreachable_and_payment_endpoints_fail_closed(self):
+        with self.assertRaises(ImproperlyConfigured):
+            get_provider()
+        self.assertEqual(self.client.post(reverse("api_payment_fake_checkout", args=[self.booking.pk]),
+                                          secure=True).status_code, 404)
+        with self.assertLogs("rental.api_errors", "ERROR"):
+            response = self.client.post(reverse("api_payment_confirm", args=[self.booking.pk]), {
+                "order_id": "fake_order_guard", "payment_id": "fake_pay_x", "signature": "0" * 64}, secure=True)
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("DEBUG", response.json()["detail"])
+        self.assertEqual(Payment.objects.get().status, "created")
+        with self.assertLogs("rental.api_errors", "ERROR"):
+            self.assertEqual(self.client.get(reverse("api_payment_config"), secure=True).status_code, 503)
+
+    @override_settings(PAYMENT_PROVIDER="razorpay", RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
+    def test_system_check_e010_razorpay_without_key(self):
+        from django.core.checks import run_checks
+        self.assertIn("rental.E010", {message.id for message in run_checks()})
+
+    @override_settings(PAYMENT_PROVIDER="paypal")
+    def test_unknown_provider_is_e008(self):
+        from django.core.checks import run_checks
+        self.assertIn("rental.E008", {message.id for message in run_checks()})
