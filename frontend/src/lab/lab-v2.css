@@ -163,3 +163,4 @@
   .lab .lab-hero { height: auto; min-height: 0; }
   .lab-hero-stage { position: relative; }
 }
+.lab-slot-date { font: 600 18px "JetBrains Mono", monospace; color: var(--dust); vertical-align: middle; }

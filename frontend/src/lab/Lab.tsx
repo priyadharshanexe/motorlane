@@ -55,7 +55,18 @@ export default function Lab() {
           onToggle: self => { if (self.isActive) drive.chapter = section.dataset.chapter ?? ""; } });
       });
     }, root);
-    return () => ctx.revert();
+    // Catalog data and images arrive after first layout and push later sections down; re-measure every trigger
+    // whenever the page height changes so scrubbed animations start where they should (not already finished).
+    let timer = 0, lastHeight = 0;
+    const observer = new ResizeObserver(entries => {
+      const height = Math.round(entries[0].contentRect.height);
+      if (height === lastHeight) return;
+      lastHeight = height;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => ScrollTrigger.refresh(), 120);
+    });
+    if (root.current) observer.observe(root.current);
+    return () => { observer.disconnect(); window.clearTimeout(timer); ctx.revert(); };
   }, []);
   return (
     <div className="lab" data-theme={theme} ref={root}>
@@ -514,45 +525,52 @@ function StopIcon({ kind }: { kind: string }) {
 
 // ----- Chapter 4: the trip (timeline road + time road + price) ---------------------------------
 
-const STOPS = [
-  { label: "You requested", time: "22 Nov · 10:23", color: "pending" },
-  { label: "Asha approved", time: "22 Nov · 11:02", color: "confirmed", note: "Paid ₹1,650 · demo payment" },
-  { label: "Keys handed over", time: "22 Nov · 22:04", color: "progress" },
-  { label: "Return", time: "23 Nov · 10:00 · ₹1,000 deposit back", color: "ghost" },
-];
+// One sample booking, consistent everywhere: requested and approved on 22 Nov, keys handed over on 23 Nov once the
+// pickup window opens (an hour before the slot), return the same day. Keys and return follow the slot you drag.
+const slotTime = (slot: number) => `${String(Math.floor(slot / 2)).padStart(2, "0")}:${slot % 2 ? "30" : "00"}`;
+const RENTAL_SLOTS = 6;  // 3 hours
 
 function Trip() {
-  const [run, setRun] = useState(0);
+  const [pickup, setPickup] = useState(CLEANING_UNTIL + 2);
+  const [h, m] = slotTime(pickup).split(":").map(Number);
+  const keys = `${String(h).padStart(2, "0")}:${String(m + 4).padStart(2, "0")}`;  // handed over 4 minutes into the slot
+  const stops = [
+    { label: "You requested", time: "22 Nov · 10:23", color: "pending" },
+    { label: "Asha approved", time: "22 Nov · 11:02", color: "confirmed", note: "Paid ₹1,650 · demo payment" },
+    { label: "Keys handed over", time: `23 Nov · ${keys}`, color: "progress" },
+    { label: "Return", time: `23 Nov · ${slotTime(pickup + RENTAL_SLOTS)} · ₹1,000 deposit back`, color: "ghost" },
+  ];
   return (
     <section className="lab-trip" data-chapter="Stage 4 · Your trip">
-      <div className="lab-trip-road">
-        <TimelineRoad key={run} />
-        <button className="lab-replay" onClick={() => setRun(run + 1)}>Replay the road</button>
-      </div>
-      <TripTicket />
+      <div className="lab-trip-road"><TimelineRoad stops={stops} /></div>
+      <TripTicket pickup={pickup} setPickup={setPickup} />
     </section>
   );
 }
 
-function TimelineRoad() {
-  const path = useRef<SVGPathElement>(null), car = useRef<SVGGElement>(null);
+/** The timeline road is scrubbed by scroll: it draws as the section rises from 75% to 35% of the viewport, each
+ *  stop lights up when the line reaches it, and scrolling back up retracts it. Nothing plays on load. */
+function TimelineRoad({ stops }: { stops: { label: string; time: string; color: string; note?: string }[] }) {
+  const path = useRef<SVGPathElement>(null), car = useRef<SVGGElement>(null), wrapper = useRef<HTMLDivElement>(null);
   const [reached, setReached] = useState(0);
-  const wrapper = useOnce<HTMLDivElement>(() => {
-    const line = path.current, marker = car.current;
-    if (!line || !marker) return;
-    const total = line.getTotalLength(), target = total * 0.62;
-    const stops = [0, 0.27, 0.62].map(f => f * total);
-    const state = { length: 0 };
+  useLayoutEffect(() => {
+    const line = path.current!, marker = car.current!, total = line.getTotalLength();
+    const marks = [0.02, 0.27, 0.6, 0.97];
     let shown = -1;
-    const render = () => {
-      line.style.strokeDasharray = `${state.length.toFixed(1)} ${total.toFixed(1)}`;
-      const point = line.getPointAtLength(state.length);
+    const render = (progress: number) => {
+      const length = total * progress;
+      line.style.strokeDasharray = `${length.toFixed(1)} ${total.toFixed(1)}`;
+      const point = line.getPointAtLength(length);
       marker.setAttribute("transform", `translate(${point.x.toFixed(1)} ${point.y.toFixed(1)})`);
-      const count = stops.filter(s => s <= state.length + 1).length;
+      const count = marks.filter(mark => progress >= mark).length;
       if (count !== shown) { shown = count; setReached(count); }
     };
-    gsap.to(state, { length: target, duration: reducedMotion() ? 0 : 2.2, ease: "power3.out", onUpdate: render, onComplete: render });
-  }, "top 70%");
+    if (reducedMotion()) { render(1); return; }
+    render(0);
+    const trigger = ScrollTrigger.create({ trigger: wrapper.current, start: "top 75%", end: "top 35%", scrub: 0.6,
+      onUpdate: self => render(self.progress) });
+    return () => trigger.kill();
+  }, []);
   const d = "M60 20 C 60 160, 100 200, 100 300 S 60 440, 60 560 S 100 680, 100 740";
   return (
     <div className="lab-timeline" ref={wrapper}>
@@ -563,7 +581,7 @@ function TimelineRoad() {
         <g ref={car}><circle r="11" className="lab-car" /></g>
       </svg>
       <ol>
-        {STOPS.map((stop, index) => (
+        {stops.map((stop, index) => (
           <li key={stop.label} className={index < reached ? "reached" : ""} style={{ top: `${[20, 210, 430, 650][index]}px` }}>
             <span className={`lab-dot lab-${stop.color}`} />
             <div><b>{stop.label}</b><small className="mono">{stop.time}</small>{stop.note && <span className="lab-tag-note">{stop.note}</span>}</div>
@@ -577,11 +595,10 @@ function TimelineRoad() {
 // Time road for 23 Nov: an earlier rental until 10:00, then a 2-hour cleaning window.
 const BOOKED_UNTIL = 10 * 2, CLEANING_UNTIL = 12 * 2, DAY = 48;
 
-function TripTicket() {
-  const [pickup, setPickup] = useState(CLEANING_UNTIL + 2);
+function TripTicket({ pickup, setPickup }: { pickup: number; setPickup: (slot: number) => void }) {
   const [bump, setBump] = useState(false);
   const [counted, setCounted] = useState(false);
-  const length = 6;
+  const length = RENTAL_SLOTS;
   const track = useRef<HTMLDivElement>(null);
   const hours = useMemo(() => length / 2, [length]);
   const price = 650 * Math.max(1, Math.ceil(hours / 24));
@@ -607,8 +624,8 @@ function TripTicket() {
       <h2>Honda Activa 6G</h2>
       <span className="lab-status">● On the road</span>
       <div className="lab-slots">
-        <div><small>Pickup</small><Odometer value={time(pickup)} size="md" /></div>
-        <div className="lab-right"><small>Return</small><Odometer value={time(pickup + length)} size="md" /></div>
+        <div><small>Pickup</small><span className="lab-slot-date">23 Nov ·</span> <Odometer value={time(pickup)} size="md" /></div>
+        <div className="lab-right"><small>Return</small><span className="lab-slot-date">23 Nov ·</span> <Odometer value={time(pickup + length)} size="md" /></div>
       </div>
       <div className="lab-breakdown">
         <div className="lab-row lab-weekend"><span>1 weekend day × ₹650</span><span className="mono">₹{price.toLocaleString("en-IN")}</span></div>
