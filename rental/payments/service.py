@@ -35,7 +35,11 @@ def start_payment(booking):
     existing = Payment.objects.filter(booking=booking).first()
     if existing and existing.is_paid:
         raise ValidationError("This booking is already paid.")
-    if existing and existing.status == Payment.Status.CREATED:
+    if existing and existing.status in (Payment.Status.CREATED, Payment.Status.FAILED):
+        # Reuse the provider order: a late success on it must still find this payment.
+        if existing.status == Payment.Status.FAILED:
+            existing.status = Payment.Status.CREATED
+            existing.save(update_fields=["status"])
         return existing
     provider = get_provider()
     payment = existing or Payment(booking=booking)
@@ -50,7 +54,16 @@ def start_payment(booking):
     return payment
 
 
+PAYABLE = (Booking.Status.CONFIRMED, Booking.Status.IN_PROGRESS, Booking.Status.RETURNED)
+
+
 def mark_paid(payment, payment_id):
+    """Record a captured payment. Call with the payment row locked.
+
+    Money can arrive after the booking stopped needing it (the renter cancelled or the request
+    expired while a checkout window was open, or a webhook arrives late). The payment is still
+    recorded, because the money did move, and it is refunded in full straight away.
+    """
     if payment.is_paid:
         return False
     payment.payment_id = payment_id
@@ -58,6 +71,10 @@ def mark_paid(payment, payment_id):
     payment.paid_at = timezone.now()
     payment.save(update_fields=["payment_id", "status", "paid_at"])
     logger.info("payment_completed booking_id=%s provider=%s", payment.booking_id, payment.provider)
+    booking = Booking.objects.select_for_update().get(pk=payment.booking_id)
+    if booking.status not in PAYABLE:
+        logger.warning("payment_after_close booking_id=%s status=%s: refunding in full", booking.pk, booking.status)
+        issue_refund(payment, payment.amount - payment.refunded_amount, "booking_closed")
     return True
 
 
@@ -216,6 +233,8 @@ def handle_webhook(body, signature, event_id):
     if not provider.verify_webhook(body, signature):
         raise PermissionError("Invalid webhook signature.")
     payload = json.loads(body)
+    if not isinstance(payload, dict):
+        raise ValueError("Webhook body must be a JSON object.")
     event_type = payload.get("event", "")
     event_id = event_id or payload.get("id", "")
     if not event_id:
