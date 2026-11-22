@@ -1,0 +1,335 @@
+// Home: "Put it in drive." A sticky hero where scrolling drives the road (the 3D road, or the 2D road on low-end
+// devices / reduced motion), the headline stretches with speed, and the search dashboard counts what is free for
+// the chosen dates on an odometer. Below: the newest listings drop onto a rack as key tags, and "how a rental
+// drives" draws itself as you scroll.
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
+import { api } from "../api";
+import type { Vehicle } from "../api";
+import { Notice } from "../shared";
+import { drive, gsap, IDLE_KMH, MAX_KMH, onDrive, ScrollTrigger } from "./drive";
+import { KeyTag, KeyTagSkeleton } from "./KeyTag";
+import { canRun3D, Odometer, reducedMotion, TripMeter, useOnce } from "./primitives";
+import { useTheme } from "./theme";
+
+const Road3D = lazy(() => import("./Road3D"));
+type Catalog = { count: number; next: string | null; previous: string | null; results: Vehicle[] };
+
+export function Home() {
+  return (
+    <div className="od-home">
+      <Hero />
+      <Rack />
+      <HowItWorks />
+      <HostCallout />
+    </div>
+  );
+}
+
+// ----- Hero --------------------------------------------------------------------------------------------------------
+
+function Hero() {
+  const { theme } = useTheme();
+  const navigate = useNavigate();
+  const [type, setType] = useState("");
+  const [start, setStart] = useState(""), [end, setEnd] = useState("");
+  const datesReady = Boolean(start && end && start <= end);
+  const filter = new URLSearchParams({ ...(type ? { type } : {}), ...(datesReady ? { start_date: start, end_date: end } : {}) });
+  const available = useQuery({ queryKey: ["vehicles", "count", filter.toString()], queryFn: () => api<Catalog>(`vehicles/?${filter}`) });
+  const all = useQuery({ queryKey: ["vehicles", ""], queryFn: () => api<Catalog>("vehicles/") });
+  const count = String(available.data?.count ?? 0).padStart(3, "0");
+  const placeKey = [...new Set((all.data?.results ?? []).map(v => v.location?.split(",")[0].trim()).filter(Boolean))].join("|")
+    || "Madurai|Coimbatore|Tiruchirappalli|Salem|Chennai";
+  const places = useMemo(() => placeKey.split("|"), [placeKey]);
+
+  const section = useRef<HTMLElement>(null), headline = useRef<HTMLHeadingElement>(null);
+  const streaks = useRef<HTMLDivElement>(null), sheet = useRef<HTMLSpanElement>(null), flatDashes = useRef<HTMLSpanElement>(null);
+  const needle = useRef<SVGLineElement>(null), kmh = useRef<HTMLSpanElement>(null);
+  const [use3D] = useState(canRun3D);
+  const [onScreen, setOnScreen] = useState(true);
+
+  useLayoutEffect(() => {
+    if (reducedMotion()) return;
+    const visibility = ScrollTrigger.create({ trigger: section.current, start: "top bottom", end: "bottom top",
+      onToggle: self => setOnScreen(self.isActive) });
+    return () => visibility.kill();
+  }, []);
+
+  // Per frame from the shared drive state: headline stretch, speed streaks, speedometer, and the 2D road.
+  useEffect(() => {
+    let distance = 0, streakY = 0, streaksOn = true, shownKmh = -1;
+    return onDrive(dt => {
+      const t = drive.throttle;
+      if (headline.current) headline.current.style.transform = `scaleX(${(1 + t * 0.18).toFixed(3)}) skewX(${(-t * 8).toFixed(2)}deg)`;
+      if (streaks.current && sheet.current) {
+        const on = t > 0.04;
+        if (on !== streaksOn) { streaksOn = on; streaks.current.style.visibility = on ? "visible" : "hidden"; }
+        if (on) {
+          streakY = (streakY + (900 + t * 2600) * dt) % 540;
+          streaks.current.style.opacity = (t * 0.8).toFixed(2);
+          sheet.current.style.transform = `translate3d(0, ${(streakY - 540).toFixed(0)}px, 0) scaleY(${(0.6 + t * 1.4).toFixed(2)})`;
+        }
+      }
+      if (needle.current) needle.current.style.transform = `rotate(${(-125 + (drive.kmh / MAX_KMH) * 250).toFixed(1)}deg)`;
+      const rounded = Math.round(drive.kmh);
+      if (kmh.current && rounded !== shownKmh) { shownKmh = rounded; kmh.current.textContent = String(rounded).padStart(3, "0"); }
+      if (flatDashes.current) {
+        distance = (distance + (40 + t * 1400) * dt) % 82;
+        flatDashes.current.style.transform = `translate3d(0, ${(distance - 82).toFixed(1)}px, 0) scaleY(${(1 + t * 1.5).toFixed(2)})`;
+      }
+    });
+  }, []);
+
+  const search = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const query = new URLSearchParams();
+    const location = String(form.get("location") ?? "").trim();
+    if (location) query.set("location", location);
+    if (start) query.set("start_date", start);
+    if (end) query.set("end_date", end);
+    if (type) query.set("type", type);
+    navigate(`/vehicles?${query}`, { viewTransition: true });
+  };
+
+  return (
+    <section className="od-hero" ref={section} data-chapter="Highway 1 · Start">
+      <div className="od-hero-stage">
+        <div className="od-hero-scene">
+          {use3D ? (
+            <Suspense fallback={<FlatRoad dashes={flatDashes} />}>
+              <Road3D light={theme === "light"} active={onScreen} places={places} />
+            </Suspense>
+          ) : <FlatRoad dashes={flatDashes} />}
+          <div className="od-streaks" ref={streaks} aria-hidden="true"><span className="od-streaks-sheet" ref={sheet} /></div>
+        </div>
+        <div className="od-hero-copy">
+          <h1 ref={headline} tabIndex={-1}>Your next <br />stretch <br />of <em>road.</em></h1>
+          <p>Cars and bikes from local owners across Tamil Nadu. Pick your dates, see what is free, take the keys.</p>
+          <p className="od-cue"><span className="od-cue-wheel" aria-hidden="true" /> Scroll to drive</p>
+        </div>
+        <form className="od-dash" onSubmit={search} aria-label="Find a vehicle">
+          <div className="od-speedo" aria-hidden="true">
+            <svg viewBox="-60 -60 120 120">
+              <path className="arc" d="M-42 30 A52 52 0 1 1 42 30" />
+              <path className="arc-red" d="M33 -40 A52 52 0 0 1 49 18" />
+              {Array.from({ length: 9 }, (_, i) => {
+                const a = (-125 + i * 31.25) * Math.PI / 180;
+                return <line key={i} className="tick" x1={Math.sin(a) * 44} y1={-Math.cos(a) * 44} x2={Math.sin(a) * 52} y2={-Math.cos(a) * 52} />;
+              })}
+              <line ref={needle} className="needle" x1="0" y1="6" x2="0" y2="-46" />
+              <circle r="6" className="hub" />
+            </svg>
+            <span className="od-speedo-read mono"><span ref={kmh}>{String(IDLE_KMH).padStart(3, "0")}</span><small>km/h</small></span>
+          </div>
+          <div className="od-count" aria-live="polite">
+            <small>{datesReady ? "Free for your dates" : "On the road now"}</small>
+            <Odometer value={count} label={`${available.data?.count ?? 0} vehicles`} />
+          </div>
+          <div className="od-cluster">
+            <label className="od-field"><small>Location</small><input name="location" placeholder="Any town" autoComplete="off" /></label>
+            <label className="od-field"><small>Pickup</small><input type="date" value={start} onChange={e => setStart(e.target.value)} /></label>
+            <label className="od-field"><small>Return</small><input type="date" value={end} min={start || undefined} onChange={e => setEnd(e.target.value)} /></label>
+            <div className="od-field"><small id="od-type">Type</small>
+              <div className="od-seg" role="group" aria-labelledby="od-type">
+                {[["", "All"], ["Car", "Cars"], ["Bike", "Bikes"]].map(([value, label]) => (
+                  <button type="button" key={value} aria-pressed={type === value} onClick={() => setType(value)}>{label}</button>
+                ))}
+              </div>
+            </div>
+            <div className="od-field od-trip"><small>Trip meter</small><TripMeter digits={5} /></div>
+            <button className="od-go">Search rides</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+/** The 2D road, with a static roadside so it is never empty. */
+function FlatRoad({ dashes }: { dashes: React.RefObject<HTMLSpanElement | null> }) {
+  const palm = (x: number, y: number, s: number, flip = 1) => (
+    <g transform={`translate(${x} ${y}) scale(${s * flip} ${s})`} className="od-flat-palm">
+      <path d="M0 0 C 4 -40, 10 -80, 6 -120" className="trunk" />
+      <path d="M6 -120 c -20 -10 -40 -4 -54 12 c 18 -14 36 -14 54 -12 z M6 -120 c 20 -12 42 -6 56 10 c -18 -12 -38 -12 -56 -10 z
+        M6 -120 c -10 -18 -30 -26 -44 -24 c 16 2 32 10 44 24 z M6 -120 c 12 -18 32 -24 46 -20 c -16 2 -34 8 -46 20 z" className="leaf" />
+    </g>
+  );
+  return (
+    <div className="od-flatroad">
+      <svg className="od-flat-scenery" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <path className="far" d="M0 240 C 120 190, 200 210, 300 196 S 480 170, 560 200 S 760 180, 860 206 S 960 196, 1000 210 V 260 H 0 Z" />
+        <rect className="field" x="0" y="258" width="1000" height="442" />
+        {palm(90, 520, 1.5)}{palm(200, 380, 0.9, -1)}{palm(830, 560, 1.7, -1)}{palm(930, 420, 1.1)}
+      </svg>
+      <div className="od-road-surface"><span className="od-road-dashes" ref={dashes} /></div>
+    </div>
+  );
+}
+
+// ----- The rack of key tags --------------------------------------------------------------------------------------
+
+function Rack() {
+  const [category, setCategory] = useState("");
+  // The six newest listings of the chosen category, straight from the API's "newest" sort.
+  const filter = new URLSearchParams({ sort: "newest", ...(category ? { type: category } : {}) }).toString();
+  const query = useQuery({ queryKey: ["vehicles", filter], queryFn: () => api<Catalog>(`vehicles/?${filter}`), placeholderData: keepPreviousData });
+  const rows = (query.data?.results ?? []).slice(0, 6);
+  const rack = useRef<HTMLDivElement>(null);
+  const [arrived, setArrived] = useState(false);
+  const section = useOnce<HTMLElement>(() => setArrived(true), "top 72%");
+  // When the rack scrolls in, the tags fall onto their hooks and swing until they settle (one damped swing each).
+  useLayoutEffect(() => {
+    if (!arrived || !rack.current || !rows.length) return;
+    const tags = rack.current.querySelectorAll(".od-drop");
+    if (reducedMotion()) { gsap.set(tags, { opacity: 1, y: 0, rotation: 0 }); return; }
+    const ctx = gsap.context(() => {
+      gsap.fromTo(tags, { y: -320, opacity: 0, rotation: (i: number) => (i % 2 ? 14 : -14) },
+        { y: 0, opacity: 1, duration: 0.5, ease: "power3.in", stagger: 0.08 });
+      gsap.to(tags, { rotation: 0, duration: 1.6, ease: "elastic.out(1.1, 0.3)", stagger: 0.08, delay: 0.45 });
+    }, rack);
+    return () => ctx.revert();
+  }, [arrived, rows.length, category]);
+  return (
+    <section className="od-rack" ref={section} data-chapter="Exit 2 · The rack">
+      <div className="od-lane-head">
+        <div>
+          <span className="od-eyebrow">Newest on the rack</span>
+          <h2>{query.data ? <><Odometer value={String(query.data.count).padStart(2, "0")} size="md" /> rides, one key each</> : "Rides, one key each"}</h2>
+        </div>
+        <div className="od-seg od-seg-lg" role="group" aria-label="Vehicle category">
+          {[["", "All rides"], ["Car", "Cars"], ["Bike", "Bikes"]].map(([value, label]) => (
+            <button type="button" key={value} aria-pressed={category === value} onClick={() => setCategory(value)}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="od-rack-bar" aria-hidden="true" />
+      <Notice error={query.error} />
+      <div className="od-tags" ref={rack}>
+        {query.isPending && Array.from({ length: 6 }, (_, i) => <KeyTagSkeleton key={i} />)}
+        {rows.map((vehicle, index) => (
+          <div className="od-drop" key={vehicle.id} style={{ opacity: arrived || reducedMotion() ? undefined : 0 }}>
+            <KeyTag vehicle={vehicle} index={index} />
+          </div>
+        ))}
+      </div>
+      {query.data && !rows.length && <p className="od-empty-line">New listings are on their way.</p>}
+      <Link className="od-cta od-cta-ghost" to={category ? `/vehicles?type=${category}` : "/vehicles"} viewTransition>See every ride</Link>
+    </section>
+  );
+}
+
+// ----- How a rental drives --------------------------------------------------------------------------------------
+
+const HOW = [
+  { title: "Pick your dates", text: "Choose pickup and return; the price and deposit add up before you send anything.", icon: "clock" },
+  { title: "Owner approves", text: "The owner confirms within 24 hours. You pay the rental and a refundable deposit.", icon: "stamp" },
+  { title: "Take the keys", text: "Pickup opens an hour before your slot, and the owner hands over the keys.", icon: "key" },
+  { title: "Return", text: "Bring it back on time and the deposit comes back to you automatically.", icon: "flag" },
+];
+
+function HowItWorks() {
+  const road = useRef<SVGPathElement>(null), reveal = useRef<SVGPathElement>(null), lane = useRef<SVGPathElement>(null);
+  const car = useRef<SVGGElement>(null), stops = useRef<(HTMLLIElement | null)[]>([]), pins = useRef<(SVGGElement | null)[]>([]);
+  // Scroll draws the dashed centre line (scrubbed, so scrolling back retracts it) and drives a car along it, turned
+  // to the road. Each stop wakes its step when the car reaches it. The dashes flow at the hero's speed.
+  useLayoutEffect(() => {
+    const path = road.current!, length = path.getTotalLength();
+    const lengthAtX = (x: number) => {
+      let lo = 0, hi = length;
+      for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (path.getPointAtLength(mid).x < x) lo = mid; else hi = mid; }
+      return lo;
+    };
+    const marks = [150, 450, 750, 1050].map(x => lengthAtX(x) / length);
+    marks.forEach((mark, i) => {
+      const p = path.getPointAtLength(mark * length);
+      pins.current[i]?.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
+    });
+    reveal.current!.style.strokeDasharray = `${length} ${length}`;
+    const place = (progress: number) => {
+      reveal.current!.style.strokeDashoffset = String(length * (1 - progress));
+      const at = Math.max(0.5, length * progress), p = path.getPointAtLength(at);
+      const ahead = path.getPointAtLength(Math.min(length, at + 2)), behind = path.getPointAtLength(Math.max(0, at - 2));
+      const angle = Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * 180 / Math.PI;
+      car.current?.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${angle.toFixed(1)})`);
+      marks.forEach((mark, i) => {
+        const on = progress >= mark - 0.005;
+        stops.current[i]?.classList.toggle("on", on);
+        pins.current[i]?.classList.toggle("on", on);
+      });
+    };
+    if (reducedMotion()) { place(1); return; }
+    place(0);
+    const trigger = ScrollTrigger.create({ trigger: path.ownerSVGElement, start: "center 85%", end: "center 30%", scrub: 0.6,
+      onUpdate: self => place(self.progress) });
+    let flow = 0;
+    const stopFlow = onDrive(dt => {
+      flow = (flow - (drive.kmh / MAX_KMH) * 240 * dt) % 40;
+      if (lane.current) lane.current.style.strokeDashoffset = flow.toFixed(1);
+    });
+    return () => { trigger.kill(); stopFlow(); };
+  }, []);
+  const d = "M20 200 C 220 200, 260 60, 460 60 S 700 200, 900 190 S 1120 70, 1180 70";
+  return (
+    <section className="od-how" data-chapter="Junction 3 · How it works">
+      <span className="od-eyebrow">Less planning, more going</span>
+      <h2>How a rental <em>drives</em></h2>
+      <div className="od-how-road">
+        <svg viewBox="0 0 1200 260" aria-hidden="true">
+          <defs>
+            <mask id="od-how-reveal" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="260">
+              <path ref={reveal} d={d} fill="none" stroke="#fff" strokeWidth="20" />
+            </mask>
+          </defs>
+          <path ref={road} className="od-how-asphalt" d={d} />
+          <path className="od-how-ghost" d={d} />
+          <path ref={lane} className="od-how-lane" d={d} mask="url(#od-how-reveal)" />
+          {[0, 1, 2, 3].map(i => (
+            <g key={i} ref={el => { pins.current[i] = el; }} className={`od-how-pin${i === 3 ? " finish" : ""}`}>
+              <circle r="13" /><circle r="5" className="core" />
+            </g>
+          ))}
+          <g ref={car} className="od-how-vehicle">
+            <rect x="-17" y="-9" width="34" height="18" rx="6" className="body" />
+            <rect x="2" y="-7" width="9" height="14" rx="2" className="glass" />
+            <rect x="-13" y="-7" width="6" height="14" rx="2" className="glass" />
+          </g>
+        </svg>
+        <ol className="od-how-stops">
+          {HOW.map((stop, i) => (
+            <li key={stop.title} ref={el => { stops.current[i] = el; }} className="od-how-stop">
+              <StopIcon kind={stop.icon} />
+              <b>{stop.title}</b>
+              <p>{stop.text}</p>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
+function StopIcon({ kind }: { kind: string }) {
+  const icons: Record<string, ReactNode> = {
+    clock: <><circle cx="24" cy="24" r="18" className="ring" /><line x1="24" y1="24" x2="24" y2="12" className="hand hand-long" /><line x1="24" y1="24" x2="32" y2="24" className="hand hand-short" /></>,
+    stamp: <><rect x="8" y="10" width="32" height="28" rx="3" className="ring" /><path d="M15 25 l6 6 l12 -14" className="check" /></>,
+    key: <g className="key"><circle cx="16" cy="18" r="8" className="ring" /><path d="M22 23 L38 39 M32 33 l4 -4 M28 29 l3 -3" className="ring" /></g>,
+    flag: <><line x1="12" y1="8" x2="12" y2="42" className="ring" /><path d="M12 9 C 22 5, 28 15, 38 10 L38 26 C 28 31, 22 21, 12 25 Z" className="flag" /></>,
+  };
+  return <svg className="od-stop-icon" viewBox="0 0 48 48" aria-hidden="true">{icons[kind]}</svg>;
+}
+
+function HostCallout() {
+  return (
+    <section className="od-host-callout">
+      <div>
+        <span className="od-eyebrow">Your vehicle, new possibilities</span>
+        <h2>Let your vehicle go places.</h2>
+        <p>Put a parked car or bike to work. You set the price, the deposit and which requests to accept.</p>
+      </div>
+      <Link className="od-cta" to="/owner/fleet?edit=new">Become a host</Link>
+    </section>
+  );
+}

@@ -49,6 +49,9 @@ export function startDrive() {
   return lenis;
 }
 
+/** The active Lenis instance (null under reduced motion or before startDrive). */
+export const getLenis = () => lenis;
+
 export function stopDrive() {
   users -= 1;
   if (users > 0) return;
