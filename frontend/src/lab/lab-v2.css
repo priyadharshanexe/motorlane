@@ -179,7 +179,7 @@
 /* No half-screen fog in daylight: a soft, local halo sits behind the headline block only. */
 .lab[data-theme="light"] .lab-hero-scene::after { display: none; }
 .lab[data-theme="light"] .lab-hero-copy::before { content: ""; position: absolute; z-index: -1; inset: -40px -120px -60px -80px; pointer-events: none;
-  background: radial-gradient(ellipse at 35% 45%, rgba(243, 241, 236, .88) 0%, rgba(243, 241, 236, .6) 45%, rgba(243, 241, 236, 0) 72%); }
+  background: radial-gradient(ellipse at 35% 45%, rgba(248, 245, 238, .92) 0%, rgba(248, 245, 238, .72) 45%, rgba(248, 245, 238, 0) 74%); }
 .lab[data-theme="light"] .lab-dash .lab-counter { background: rgba(243, 241, 236, .85); padding: 8px 10px; border-radius: 6px; }
 .lab[data-theme="light"] .lab-speedo { background: radial-gradient(circle at 50% 55%, rgba(243, 241, 236, .9) 0 58%, transparent 70%); }
 /* Odometer wheels: paper-white wheels with a hairline, dark digits; the tenths wheel stays lane yellow. */
@@ -208,3 +208,7 @@
 .lab-hud { transition: opacity .35s var(--ease-out), transform .35s var(--ease-out); }
 .lab-hud.away { opacity: 0; transform: translate(-50%, 24px); pointer-events: none; }
 @media (max-height: 800px) { .lab .lab-hero-copy p { margin-top: 18px; } .lab-speedo { transform: scale(.85); transform-origin: 0 100%; } }
+.lab[data-theme="light"] .lab-bar { background: none; }
+.lab[data-theme="light"] .lab-bar .lab-note { background: rgba(248, 245, 238, .85); padding: 4px 10px; border-radius: 999px; color: #3E4249; }
+.lab[data-theme="light"] .lab-toggle { background: rgba(248, 245, 238, .9); }
+.lab[data-theme="light"] .lab-mark { background: rgba(248, 245, 238, .85); padding: 6px 12px 6px 8px; border-radius: 8px; }

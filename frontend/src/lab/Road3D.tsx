@@ -19,15 +19,15 @@ const zOf = (i: number, spacing: number, period: number, travel: number) =>
 
 type Palette = ReturnType<typeof palette>;
 const palette = (light: boolean) => light ? {
-  skyTop: "#E9E1CE", skyLow: "#F5EEDF", road: "#8C8F93", shoulder: "#CFCAC0", edge: "#FFFFFF", lane: "#FFC531", post: "#ECE7DA",
-  eye: "#C9761A", field: "#9DBB6A", paddy: "#7FA552", trunk: "#8A6B4A", leaf: "#4E8C3A", tree: "#5E9446",
-  hill: "#B4B99A", hill2: "#C7C6AA", gopuram: "#BFAE8D", rail: "#C9CCD0", lamp: "#D8D4CB", pool: "#000000",
-  shadow: 0.22, poolOpacity: 0, moon: false,
+  skyTop: "#8FCBE6", skyLow: "#F7E8C9", road: "#76726C", shoulder: "#D9CFBC", edge: "#FFFFFF", lane: "#FFC531", post: "#F2EEE4",
+  eye: "#D9761A", field: "#8BBE4B", paddy: "#6EA637", trunk: "#8A6440", leaf: "#3E9140", leaf2: "#6DB548", tree: "#4C9B3C",
+  hill: "#7FA69A", hill2: "#A3C2BC", gopuram: "#C9A577", rail: "#D5D8DC", lamp: "#D8D4CB", pool: "#000000",
+  shadow: 0.32, poolOpacity: 0, moon: false, haze: "#F7E8C9",
 } : {
   skyTop: "#0E1013", skyLow: "#2A251D", road: "#1C1F23", shoulder: "#23262A", edge: "#D8D4CB", lane: "#FFC531", post: "#3A3F46",
   eye: "#FFB020", field: "#141E17", paddy: "#1A2A1F", trunk: "#2E2820", leaf: "#183022", tree: "#15291C",
   hill: "#22231F", hill2: "#2B2A24", gopuram: "#332F27", rail: "#4A4F56", lamp: "#FFE6A8", pool: "#FFC970",
-  shadow: 0, poolOpacity: 0.16, moon: true,
+  shadow: 0, poolOpacity: 0.16, moon: true, leaf2: "#1F3A28", haze: "#2A251D",
 };
 
 /** A soft round blob (light pools at night, contact shadows by day). */
@@ -118,7 +118,7 @@ const gopuram = () => {
   return silhouette([...left, -1.4, height + 1.6, -0.6, height + 2.2, 0, height + 3, 0.6, height + 2.2, 1.4, height + 1.6, ...right]);
 };
 
-const DASHES = 26, DASH_SPACING = 6;
+const DASHES = 34, DASH_SPACING = 4;  // tight enough that a dash is always in the bottom of the frame
 const POSTS = 20, POST_SPACING = 7;
 const MILESTONES = 5, MILE_SPACING = 32;
 const RAILS = 24, RAIL_SPACING = 5.4;
@@ -157,6 +157,12 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
   const mileGroup = useRef<THREE.Group>(null), ridgeA = useRef<THREE.Group>(null), ridgeB = useRef<THREE.Group>(null);
   const templeMesh = useRef<THREE.Mesh>(null);
   const travel = useRef(0);
+  useEffect(() => {  // palm fronds in two greens, alternating, so crowns read as leaves rather than one flat colour
+    const mesh = fronds.current; if (!mesh) return;
+    const a = new THREE.Color(colors.leaf), b = new THREE.Color(colors.leaf2);
+    for (let i = 0; i < PALMS * FRONDS; i++) mesh.setColorAt(i, i % 2 ? a : b);
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }, [colors]);
   const budget = useRef({ frames: 0, total: 0 });
   const k = lite ? 2 : 1;  // lite mode keeps every other roadside object (same spacing along the road, half the work)
   useEffect(() => {
@@ -187,18 +193,19 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
     travel.current += (4 + throttle * 70) * dt;  // road units per second: a crawl at idle, a rush at full throttle
     const s = travel.current;
     // Dashes lengthen into streaks with speed but never close the gap (2.2 long, 6 apart: at most ~3.7 long).
-    const stretch = 1 + throttle * 0.7;
+    const stretch = 1 + throttle * 0.6;  // 1.8 long, 4 apart: at most ~2.9 long, so a gap always shows
 
     for (let i = 0; i < DASHES; i++) {
-      const z = zOf(i, DASH_SPACING, DASHES * DASH_SPACING, s), seen = z < 0.2 ? 1 : 0;  // nothing under the bonnet
-      set(dashes.current, i, 0, 0.011, z, seen, seen, stretch * seen);
+      // Dashes run right under the camera and recycle once behind it; the capped stretch keeps the nearest one a dash.
+      set(dashes.current, i, 0, 0.011, zOf(i, DASH_SPACING, DASHES * DASH_SPACING, s), 1, 1, stretch);
     }
 
     // Reflector posts on both edges, alternating, each with a cat's-eye facing the driver.
     for (let i = 0; i < POSTS; i++) {
       const side = i % 2 ? 1 : -1, z = zOf(i, POST_SPACING / 2, (POSTS * POST_SPACING) / 2, s);
-      set(posts.current, i, side * 4.45, 0.4, z, 1, 1, 1 + throttle * 1.5);
-      set(eyes.current, i, side * 4.45, 0.62, z + 0.07, 1, 1, 1 + throttle * 2.5);
+      const near = z > -1.5 ? 0 : 1;  // keep scenery a minimum distance from the camera
+      set(posts.current, i, side * 4.45, 0.4, z, near, near, (1 + throttle * 1.5) * near);
+      set(eyes.current, i, side * 4.45, 0.62, z + 0.07, near, near, (1 + throttle * 2.5) * near);
     }
     // Guard rail on the left in stretches (scaled to nothing in the gaps).
     for (let i = 0; i < RAILS; i++) {
@@ -206,7 +213,10 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
       set(rails.current, i, -4.9, 0.55, zOf(i, RAIL_SPACING, RAILS * RAIL_SPACING, s), on, on, on);
     }
     // Milestones on the right.
-    mileGroup.current?.children.forEach((stone, i) => { stone.position.z = zOf(i, MILE_SPACING, MILESTONES * MILE_SPACING, s + 11); });
+    mileGroup.current?.children.forEach((stone, i) => {
+      stone.position.z = zOf(i, MILE_SPACING, MILESTONES * MILE_SPACING, s + 11);
+      stone.visible = stone.position.z < -2;
+    });
     // Coconut palms: a leaning trunk and drooping fronds radiating from the crown.
     for (let i = 0; i < PALMS / k; i++) {
       const side = i % 2 ? 1 : -1, z = zOf(i, (PALM_SPACING * k) / 2, (PALMS * PALM_SPACING) / 2, s + 3);
@@ -232,9 +242,11 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
     // Streetlights alternate sides; at night each throws a warm pool on the tarmac.
     for (let i = 0; i < Math.ceil(LIGHTS / k); i++) {
       const side = i % 2 ? 1 : -1, z = zOf(i, (LIGHT_SPACING * k) / 2, (LIGHTS * LIGHT_SPACING) / 2, s + 4);
-      set(poles.current, i, side * 5.3, 2.6, z);
-      set(lamps.current, i, side * 4.3, 5.1, z);
-      set(pools.current, i, side * 2.3, 0.015, z, 3.2, 4, 1, -Math.PI / 2);
+      const vis = z < -6 ? 1 : 0;
+      set(poles.current, i, side * 5.3, 2.6, z, vis, vis, vis);
+      set(lamps.current, i, side * 4.3, 5.1, z, vis, vis, vis);
+      const far = z < -6 ? 1 : 0;  // pools only where they read as soft light ahead, never a blob under the camera
+      set(pools.current, i, side * 2.3, 0.015, z, 3.2 * far, 4 * far, 1, -Math.PI / 2);
     }
     // Paddy-field rows on both sides: thin furrows that strobe past and sell the speed.
     for (let i = 0; i < ROWS / k; i++) {
@@ -259,11 +271,14 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
   return (
     <>
       <color attach="background" args={[colors.skyLow]} />
-      <fog attach="fog" args={[colors.skyLow, light ? 30 : 22, light ? 160 : 125]} />
-      <ambientLight intensity={light ? 1.1 : 1} />
-      <directionalLight position={[-12, 14, 6]} intensity={light ? 1.6 : 0} />
+      {/* By day only a thin warm haze far out, so near and mid scenery stay crisp; a warm, slightly golden sun. */}
+      <fog attach="fog" args={[colors.haze, light ? 70 : 22, light ? 260 : 125]} />
+      <ambientLight intensity={light ? 0.75 : 1} color={light ? "#FFF6E6" : "#FFFFFF"} />
+      <directionalLight position={[-14, 12, 8]} intensity={light ? 1.5 : 0} color="#FFE3A8" />
+      {!colors.moon && <mesh position={[-60, 6, -137]}><planeGeometry args={[90, 34]} />
+        <meshBasicMaterial color="#FFE9B8" alphaMap={blob} transparent opacity={0.55} blending={THREE.AdditiveBlending} fog={false} depthWrite={false} /></mesh>}
       {/* Sky, moon and horizon skip fog: their colours are already distant. */}
-      <mesh position={[0, 34, -140]}><planeGeometry args={[700, 76]} /><meshBasicMaterial map={sky} fog={false} depthWrite={false} /></mesh>
+      <mesh position={[0, 52, -140]}><planeGeometry args={[700, 112]} /><meshBasicMaterial map={sky} fog={false} depthWrite={false} /></mesh>
       {colors.moon && <mesh position={[38, 26, -138]}><circleGeometry args={[2.6, 32]} /><meshBasicMaterial color="#EFE7D2" fog={false} /></mesh>}
       <group position={[0, -0.5, -132]}>
         <group ref={ridgeA}><mesh geometry={ridgeFar} position={[0, 2, -2]}><meshBasicMaterial color={colors.hill2} fog={false} /></mesh></group>
@@ -282,16 +297,16 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
       ))}
 
       <instancedMesh ref={rows} args={[undefined, undefined, ROWS]}><boxGeometry args={[14, 0.02, 0.35]} /><meshBasicMaterial color={colors.paddy} /></instancedMesh>
-      <instancedMesh ref={dashes} args={[undefined, undefined, DASHES]}><boxGeometry args={[0.16, 0.01, 2.2]} /><meshBasicMaterial color={colors.lane} /></instancedMesh>
+      <instancedMesh ref={dashes} args={[undefined, undefined, DASHES]}><boxGeometry args={[0.16, 0.01, 1.8]} /><meshBasicMaterial color={colors.lane} /></instancedMesh>
       <instancedMesh ref={posts} args={[undefined, undefined, POSTS]}><boxGeometry args={[0.12, 0.8, 0.12]} /><Lit color={colors.post} light={light} /></instancedMesh>
       <instancedMesh ref={eyes} args={[undefined, undefined, POSTS]}><boxGeometry args={[0.1, 0.1, 0.02]} /><meshBasicMaterial color={colors.eye} toneMapped={false} /></instancedMesh>
       <instancedMesh ref={rails} args={[undefined, undefined, RAILS]}><boxGeometry args={[0.06, 0.22, RAIL_SPACING]} /><Lit color={colors.rail} light={light} /></instancedMesh>
       <instancedMesh ref={shadows} args={[undefined, undefined, PALMS + TREES]} visible={colors.shadow > 0}>
         <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial color="#2A3A1E" alphaMap={blob} transparent opacity={colors.shadow} depthWrite={false} />
+        <meshBasicMaterial color="#2A3A1E" alphaMap={blob} transparent opacity={colors.shadow} depthWrite={false} polygonOffset polygonOffsetFactor={-1} />
       </instancedMesh>
       <instancedMesh ref={trunks} args={[undefined, undefined, PALMS]}><cylinderGeometry args={[0.1, 0.16, 1, 5]} /><Lit color={colors.trunk} light={light} /></instancedMesh>
-      <instancedMesh ref={fronds} args={[undefined, undefined, PALMS * FRONDS]}><boxGeometry args={[2.3, 0.04, 0.42]} /><Lit color={colors.leaf} light={light} /></instancedMesh>
+      <instancedMesh ref={fronds} args={[undefined, undefined, PALMS * FRONDS]}><boxGeometry args={[2.3, 0.04, 0.42]} /><Lit color="#FFFFFF" light={light} /></instancedMesh>
       <instancedMesh ref={treeTrunks} args={[undefined, undefined, TREES]}><cylinderGeometry args={[0.14, 0.2, 1, 5]} /><Lit color={colors.trunk} light={light} /></instancedMesh>
       <instancedMesh ref={canopies} args={[undefined, undefined, TREES]}><icosahedronGeometry args={[1, 1]} /><Lit color={colors.tree} light={light} /></instancedMesh>
       <instancedMesh ref={poles} args={[undefined, undefined, LIGHTS]}><boxGeometry args={[0.1, 5.2, 0.1]} /><Lit color={colors.post} light={light} /></instancedMesh>
@@ -320,7 +335,7 @@ export default function Road3D({ light, active, places }: { light: boolean; acti
   useEffect(() => { host.current?.setAttribute("data-ready", "1"); }, []);
   return (
     <div className="lab-road3d" ref={host}>
-      <Canvas dpr={lite ? 1 : [1, 1.25]} frameloop={active ? "always" : "never"} gl={{ antialias: true, powerPreference: "high-performance" }}
+      <Canvas flat dpr={lite ? 1 : [1, 1.25]} frameloop={active ? "always" : "never"} gl={{ antialias: true, powerPreference: "high-performance" }}
         camera={{ position: [0, 1.25, NEAR], fov: 58, near: 0.1, far: 150 }}>
         <Scene light={light} places={places} lite={lite} onSlow={() => setLite(true)} />
       </Canvas>
