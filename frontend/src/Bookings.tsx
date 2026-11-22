@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, dateLabel } from "./api";
-import type { Booking } from "./api";
+import type { Booking, TimelineEvent } from "./api";
 import { Busy, Notice, Photo, Status } from "./shared";
 import { formData, useWrite } from "./requests";
 import { razorpayCheckout } from "./payments";
@@ -45,6 +45,12 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
     queryFn: () => api<Booking[]>(owner ? "owner/bookings/" : "bookings/"),
   });
   const write = useWrite();
+  // The detail endpoint carries the audit timeline (every status change, who made it, refund notes).
+  const detail = useQuery({
+    queryKey: ["booking-detail", id],
+    queryFn: () => api<{ timeline: TimelineEvent[] }>(`bookings/${id}/`),
+    enabled: Boolean(id),
+  });
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const paymentConfig = useQuery({
     queryKey: ["payment-config"],
@@ -290,7 +296,7 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
                 total={row.total_price}
               />
             )}
-            {id && <BookingTimeline row={row} />}
+            {id && <BookingTimeline row={row} events={detail.data?.timeline} />}
             {review === row.id && (
               <form
                 className="fields"
@@ -331,7 +337,25 @@ function timestamp(value: string) {
   }).format(new Date(value));
 }
 
-function BookingTimeline({ row }: { row: Booking }) {
+const ACTOR_LABEL: Record<string, string> = { renter: "by you or the renter", owner: "by the owner", system: "automatically", staff: "by Motorlane staff" };
+
+function BookingTimeline({ row, events: recorded }: { row: Booking; events?: TimelineEvent[] }) {
+  if (recorded?.length) {
+    return (
+      <section className="panel booking-timeline">
+        <h3>Booking timeline</h3>
+        <ol>
+          {recorded.map(event => (
+            <li key={event.id}>
+              <strong>{event.from_status ? event.to_status : "Requested"}</strong>
+              <time dateTime={event.at}>{timestamp(event.at)}</time>
+              <small>{ACTOR_LABEL[event.actor] ?? event.actor}{event.note ? ` · ${event.note}` : ""}</small>
+            </li>
+          ))}
+        </ol>
+      </section>
+    );
+  }
   const events = [
     { label: "Picked up", at: row.picked_up_at },
     { label: "Returned", at: row.returned_at },
