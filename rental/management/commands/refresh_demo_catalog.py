@@ -46,7 +46,7 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        if not settings.DEBUG:
+        if not (settings.DEBUG or settings.DEMO_MODE):
             raise CommandError("This catalog reset is for local development only.")
         owner = Profile.objects.get(user__username="rental-demo-owner")
         root = Path(__file__).resolve().parents[2] / "demo_images"

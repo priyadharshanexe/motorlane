@@ -31,7 +31,7 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **options):
         password = os.getenv("RENTAL_DEMO_PASSWORD")
-        if not settings.DEBUG or not password or len(password) < 12:
+        if not (settings.DEBUG or settings.DEMO_MODE) or not password or len(password) < 12:
             raise CommandError("Enable local debug and set RENTAL_DEMO_PASSWORD to at least 12 characters.")
 
         profiles = {}

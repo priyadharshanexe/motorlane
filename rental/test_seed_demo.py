@@ -44,7 +44,7 @@ class SeedDemoTests(TestCase):
             self.assertFalse(booking.vehicle.maintenance_blocks.filter(**overlaps).exists())
 
     @patch.dict("os.environ", {"RENTAL_DEMO_PASSWORD": "local-test-demo-only"})
-    @override_settings(DEBUG=False)
+    @override_settings(DEBUG=False, DEMO_MODE=False)
     def test_refuses_to_seed_outside_debug(self):
         with self.assertRaises(CommandError):
             call_command("seed_demo")

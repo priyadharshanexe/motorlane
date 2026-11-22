@@ -7,6 +7,8 @@ logger = logging.getLogger(__name__)
 
 # Every job here must be idempotent: the scheduler may run them again at any time.
 JOBS = ["expire_bookings", "send_pickup_reminders", "send_notifications", "process_refunds", "reconcile_refunds"]
+# Demo deployments only (a no-op otherwise): daily wipe and re-seed.
+DEMO_JOBS = [("reset_demo", {"if_due": True})]
 
 
 class Command(BaseCommand):
@@ -14,9 +16,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         failed = []
-        for job in JOBS:
+        for job, kwargs in [*((job, {}) for job in JOBS), *DEMO_JOBS]:
             try:
-                call_command(job, stdout=self.stdout)
+                call_command(job, stdout=self.stdout, **kwargs)
             except Exception:
                 logger.exception("scheduled_job_failed job=%s", job)
                 failed.append(job)
