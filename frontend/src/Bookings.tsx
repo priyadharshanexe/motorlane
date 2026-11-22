@@ -342,11 +342,11 @@ const ACTOR_LABEL: Record<string, string> = { renter: "by you or the renter", ow
 function BookingTimeline({ row, events: recorded }: { row: Booking; events?: TimelineEvent[] }) {
   if (recorded?.length) {
     return (
-      <section className="panel booking-timeline">
+      <section className="panel booking-timeline" key="recorded">
         <h3>Booking timeline</h3>
-        <ol>
+        <ol key="recorded-events">
           {recorded.map(event => (
-            <li key={event.id}>
+            <li key={`event-${event.id}`}>
               <strong>{event.from_status ? event.to_status : "Requested"}</strong>
               <time dateTime={event.at}>{timestamp(event.at)}</time>
               <small>{ACTOR_LABEL[event.actor] ?? event.actor}{event.note ? ` · ${event.note}` : ""}</small>
@@ -364,13 +364,13 @@ function BookingTimeline({ row, events: recorded }: { row: Booking; events?: Tim
     events.push({ label: row.status, at: row.status_changed_at });
   }
   return (
-    <section className="panel booking-timeline">
+    <section className="panel booking-timeline" key="derived">
       <h3>Booking timeline</h3>
-      <ol>
+      <ol key="derived-events">
         {events
           .filter((event) => event.at || event.label === row.status)
           .map((event) => (
-            <li key={event.label}>
+            <li key={`derived-${event.label}`}>
               <strong>{event.label}</strong>
               {event.at && (
                 <time dateTime={event.at}>{timestamp(event.at)}</time>
