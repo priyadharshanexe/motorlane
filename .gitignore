@@ -13,3 +13,4 @@ staticfiles/
 
 # Production secrets for the deploy kit
 deploy/.env.production
+!deploy/.env.production.example
