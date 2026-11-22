@@ -169,12 +169,12 @@ class Booking(models.Model):
 
     @property
     def display_status(self):
+        now = timezone.now()
         if self.status == self.Status.PENDING and (
-            self.start_date < timezone.localdate()
-            or (self.expires_at and self.expires_at <= timezone.now())
+            self.pickup_at <= now or (self.expires_at and self.expires_at <= now)
         ):
             return self.Status.EXPIRED
-        if self.status == self.Status.CONFIRMED and self.end_date < timezone.localdate():
+        if self.status == self.Status.CONFIRMED and self.return_at <= now:
             return self.Status.EXPIRED
         return self.status
 

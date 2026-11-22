@@ -225,6 +225,8 @@ RENTAL_LONG_RENTAL_DISCOUNTS = (  # (minimum billable days, percent off), larges
 )
 RENTAL_FREE_CANCELLATION_HOURS = env_int("RENTAL_FREE_CANCELLATION_HOURS", 48)
 RENTAL_MAX_DAYS = env_int("RENTAL_MAX_DAYS", 90)
+# The owner may record a pickup this many minutes before the agreed pickup time.
+RENTAL_PICKUP_GRACE_MINUTES = env_int("RENTAL_PICKUP_GRACE_MINUTES", 60)
 RENTAL_MAX_ADVANCE_DAYS = env_int("RENTAL_MAX_ADVANCE_DAYS", 365)
 RENTAL_CANCELLATION_FEE_PERCENT = env_int("RENTAL_CANCELLATION_FEE_PERCENT", 20)
 

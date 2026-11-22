@@ -1,12 +1,12 @@
 """Every booking action from every status, by every kind of account."""
 from datetime import time, timedelta
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from .models import Booking, Vehicle
-from .testing import make_profile
+from .testing import make_profile, starting_soon
 
 S = Booking.Status
 ALL = [S.PENDING, S.CONFIRMED, S.REJECTED, S.EXPIRED, S.CANCELLED, S.IN_PROGRESS, S.RETURNED]
@@ -136,9 +136,9 @@ class EndToEndApiTests(TestCase):
             self.assertEqual(listing.status_code, 201, listing.content)
             vehicle_id = listing.json()["id"]
 
-            today = timezone.localdate()
-            window = {"start_date": today.isoformat(), "end_date": (today + timedelta(days=1)).isoformat(),
-                      "pickup_time": "00:05", "return_time": "00:05"}
+            start, end, pickup, dropoff = starting_soon()
+            window = {"start_date": start.isoformat(), "end_date": end.isoformat(),
+                      "pickup_time": pickup.strftime("%H:%M"), "return_time": dropoff.strftime("%H:%M")}
             self.client.force_login(renter.user)
             found = self.client.get(reverse("api_vehicle_list"), {**window, "location": "salem"}, secure=True).json()
             self.assertEqual([v["id"] for v in found["results"]], [vehicle_id])
@@ -177,3 +177,54 @@ class EndToEndApiTests(TestCase):
             self.assertEqual([m.subject for m in mail.outbox], [
                 "New rental request for your Jupiter", "Your Jupiter rental is confirmed",
                 "We received your Jupiter back", "How was your Jupiter rental?"])
+
+
+@override_settings(RENTAL_PICKUP_GRACE_MINUTES=60)
+class PickupWindowTests(TestCase):
+    """Pickup opens a grace period before the agreed time and closes at the agreed return time."""
+
+    def setUp(self):
+        self.owner, self.renter = make_profile("pw-owner"), make_profile("pw-renter")
+        self.vehicle = Vehicle.objects.create(owner=self.owner, name="Car", vehicle_type="Car", price_per_day=100)
+        self.client.force_login(self.owner.user)
+
+    def booking(self, minutes_until_pickup, hours=4):
+        start, end, pickup, dropoff = starting_soon(minutes=minutes_until_pickup, hours=hours)
+        return Booking.objects.create(user=self.renter, vehicle=self.vehicle, start_date=start, end_date=end,
+                                      pickup_time=pickup, return_time=dropoff, total_price=100, status="Confirmed")
+
+    def pickup(self, booking):
+        return self.client.post(reverse("api_booking_action", args=[booking.pk, "pickup"]), secure=True)
+
+    def test_early_pickup_is_refused_with_the_opening_time(self):
+        early = self.booking(minutes_until_pickup=180)
+        response = self.pickup(early)
+        self.assertEqual(response.status_code, 409)
+        opens = timezone.localtime(early.pickup_at - timedelta(minutes=60))
+        self.assertEqual(response.json()["detail"], f"Pickup opens at {opens:%H:%M} on {opens.day} {opens:%b}.")
+        early.refresh_from_db()
+        self.assertIsNone(early.picked_up_at)
+
+    def test_pickup_inside_the_grace_window_and_late_pickup_are_allowed(self):
+        self.assertEqual(self.pickup(self.booking(minutes_until_pickup=45)).status_code, 200)
+        Booking.objects.update(status="Returned")
+        self.assertEqual(self.pickup(self.booking(minutes_until_pickup=-90)).status_code, 200)  # 90 min late
+
+    def test_pickup_after_the_return_time_is_refused(self):
+        over = self.booking(minutes_until_pickup=-300, hours=2)
+        Booking.objects.filter(pk=over.pk).update(status="Confirmed")
+        response = self.pickup(over)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"], "This booking has expired: its time window has passed.")
+
+    def test_requests_and_no_shows_expire_by_time_not_by_date(self):
+        from .services.expiry import expire_bookings
+        missed = self.booking(minutes_until_pickup=-120, hours=1)  # return was an hour ago
+        Booking.objects.filter(pk=missed.pk).update(status="Confirmed")
+        waiting = self.booking(minutes_until_pickup=-30, hours=4)
+        Booking.objects.filter(pk=waiting.pk).update(status="Pending")
+        still_on = self.booking(minutes_until_pickup=-30, hours=4)
+        expired = expire_bookings()
+        self.assertCountEqual(expired, [missed.pk, waiting.pk])
+        still_on.refresh_from_db()
+        self.assertEqual(still_on.status, "Confirmed")

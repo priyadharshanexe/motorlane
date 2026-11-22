@@ -11,7 +11,7 @@ from django.utils import timezone
 from .models import Booking, Payment, RefundIntent as Refund, Vehicle, WebhookEvent
 from .payments.providers import FakeProvider, RazorpayTestProvider, get_provider, sign
 from .services.booking import reserve_vehicle
-from .testing import make_profile
+from .testing import make_profile, starting_soon
 
 WEBHOOK_SECRET = "whsec-test-only"
 
@@ -31,6 +31,12 @@ class PaymentFlowTests(TestCase):
         booking = reserve_vehicle(self.renter.pk, self.vehicle.pk, day, day + timedelta(days=1), pickup, pickup)
         self.client.force_login(self.owner.user)
         self.assertEqual(self.client.post(reverse("api_booking_action", args=[booking.pk, "approve"]), secure=True).status_code, 200)
+        return booking
+
+    def book_soon(self):
+        booking = reserve_vehicle(self.renter.pk, self.vehicle.pk, *starting_soon())
+        self.client.force_login(self.owner.user)
+        self.client.post(reverse("api_booking_action", args=[booking.pk, "approve"]), secure=True)
         return booking
 
     def checkout(self, booking):
@@ -75,7 +81,7 @@ class PaymentFlowTests(TestCase):
         self.assertEqual(Payment.objects.get().status, "created")
 
     def test_pickup_requires_payment(self):
-        booking = self.book(days_ahead=0, pickup=time(0, 30))
+        booking = self.book_soon()
         response = self.act(booking, "pickup", self.owner)
         self.assertEqual(response.status_code, 409)
         self.assertIn("payment", response.json()["detail"])
@@ -109,7 +115,7 @@ class PaymentFlowTests(TestCase):
         self.assertFalse(Refund.objects.exists())
 
     def test_return_refunds_the_deposit_once(self):
-        booking = self.book(days_ahead=0, pickup=time(0, 30))
+        booking = self.book_soon()
         self.checkout(booking)
         self.act(booking, "pickup", self.owner)
         self.assertEqual(self.act(booking, "return", self.owner).status_code, 200)

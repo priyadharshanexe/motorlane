@@ -221,8 +221,7 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
                 ownerActions[row.status]
                   ?.filter(
                     ([action]) =>
-                      action !== "pickup" ||
-                      (today >= row.start_date && today <= row.end_date),
+                      action !== "pickup" || pickupOpen(row),
                   )
                   .map(([action, label]) => (
                     <button
@@ -339,6 +338,13 @@ function RefundNote({ row }: { row: Booking }) {
   if (!status || !row.payment) return null;
   const amount = Number(row.payment.refunded).toLocaleString("en-IN");
   return <p className={`refund-note refund-${status}`}>{REFUND_TEXT[status].replace("{amount}", amount)}</p>;
+}
+
+/** Mirrors the server rule: pickup opens 60 minutes before the agreed time and closes at the return time. */
+function pickupOpen(row: Booking) {
+  const at = (date: string, time: string) => new Date(date + "T" + time.slice(0, 5) + ":00+05:30").getTime();
+  const now = Date.now();
+  return now >= at(row.start_date, row.pickup_time) - 60 * 60 * 1000 && now < at(row.end_date, row.return_time);
 }
 
 /** "09:00:00" -> "09:00". */

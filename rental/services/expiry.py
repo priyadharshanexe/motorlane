@@ -3,10 +3,10 @@
 Rules (the same ones `Booking.display_status` applies on read):
 
 * A PENDING request expires once its 24-hour response window (`expires_at`) has passed,
-  or once its pickup date is in the past, whichever comes first. The owner never answered.
-* A CONFIRMED booking that was never picked up expires the day after its END date, not its
-  start date. Owners may record a late pickup at any point inside the booked window, so the
-  booking only becomes a no-show once that whole window is over.
+  or once its pickup time has passed, whichever comes first. The owner never answered.
+* A CONFIRMED booking that was never picked up expires once its RETURN time has passed, not
+  its pickup time. Owners may record a late pickup at any point inside the booked window, so
+  the booking only becomes a no-show once that whole window is over.
 
 IN_PROGRESS rentals are never expired: the vehicle is physically with the renter, and an
 overdue return is surfaced as `overdue` instead.
@@ -27,16 +27,19 @@ from .notifications import notify
 logger = logging.getLogger(__name__)
 
 REQUEST_TIMED_OUT = "The owner did not respond before the request expired."
-PICKUP_DATE_PASSED = "The pickup date passed before the owner responded."
+PICKUP_DATE_PASSED = "The pickup time passed before the owner responded."
 NO_SHOW = "The rental window ended without a recorded pickup."
 
 
 def stale_bookings(now=None):
     now = now or timezone.now()
     today = timezone.localdate(now)
+    clock = timezone.localtime(now).time()
+    pickup_passed = Q(start_date__lt=today) | Q(start_date=today, pickup_time__lte=clock)
+    return_passed = Q(end_date__lt=today) | Q(end_date=today, return_time__lte=clock)
     return Booking.objects.filter(
-        Q(status=Booking.Status.PENDING) & (Q(expires_at__lte=now) | Q(start_date__lt=today))
-        | Q(status=Booking.Status.CONFIRMED, end_date__lt=today, picked_up_at__isnull=True)
+        Q(status=Booking.Status.PENDING) & (Q(expires_at__lte=now) | pickup_passed)
+        | Q(status=Booking.Status.CONFIRMED, picked_up_at__isnull=True) & return_passed
     )
 
 

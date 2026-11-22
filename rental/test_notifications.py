@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from .models import Booking, Vehicle
 from .services.booking import reserve_vehicle
-from .testing import make_profile, pay
+from .testing import make_profile, pay, starting_soon
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend", SITE_URL="https://motorlane.test")
@@ -23,7 +23,9 @@ class NotificationTests(TestCase):
 
     def request(self, day=None):
         with self.captureOnCommitCallbacks(execute=True):
-            return reserve_vehicle(self.renter.pk, self.vehicle.pk, day or self.day, day or self.day)
+            if day is None:
+                return reserve_vehicle(self.renter.pk, self.vehicle.pk, *starting_soon())
+            return reserve_vehicle(self.renter.pk, self.vehicle.pk, day, day)
 
     def act(self, booking, action, profile=None):
         self.client.force_login((profile or self.owner).user)

@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import Booking, BookingEvent, Vehicle
-from .testing import make_profile, pay
+from .testing import make_profile, pay, starting_soon
 from .services.booking import reserve_vehicle
 from .services.expiry import NO_SHOW, PICKUP_DATE_PASSED, REQUEST_TIMED_OUT, expire_bookings
 
@@ -71,7 +71,7 @@ class TimelineTests(TestCase):
 
     def test_every_transition_is_recorded_and_visible_to_both_parties_only(self):
         today = timezone.localdate()
-        booking = reserve_vehicle(self.renter.pk, self.vehicle.pk, today, today)
+        booking = reserve_vehicle(self.renter.pk, self.vehicle.pk, *starting_soon())
         self.client.force_login(self.owner.user)
         for action in ("approve", "pickup", "return"):
             if action == "pickup":
@@ -91,7 +91,7 @@ class TimelineTests(TestCase):
 
     def test_failed_transition_records_nothing(self):
         today = timezone.localdate()
-        booking = reserve_vehicle(self.renter.pk, self.vehicle.pk, today, today)
+        booking = reserve_vehicle(self.renter.pk, self.vehicle.pk, *starting_soon())
         self.client.force_login(self.owner.user)
         self.assertEqual(self.client.post(reverse("api_booking_action", args=[booking.pk, "return"]), secure=True).status_code, 409)
         self.assertEqual(booking.events.count(), 1)

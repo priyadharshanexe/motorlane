@@ -62,6 +62,8 @@ def transition_booking(actor, booking_id, destination, allowed, *, owner=False):
     vehicle = get_object_or_404(Vehicle.objects.select_for_update(), pk=reference.vehicle_id)
     booking = get_object_or_404(Booking.objects.select_for_update(), pk=booking_id)
     if booking.display_status not in allowed:
+        if booking.display_status == Booking.Status.EXPIRED and booking.status != Booking.Status.EXPIRED:
+            raise forms.ValidationError("This booking has expired: its time window has passed.")
         raise forms.ValidationError("This booking has changed. Check its current status.")
 
     from ..payments import service as payments
@@ -75,8 +77,13 @@ def transition_booking(actor, booking_id, destination, allowed, *, owner=False):
     if destination == Booking.Status.CONFIRMED and booking.start_date < today:
         raise forms.ValidationError("The pickup date has passed.")
     if destination == Booking.Status.IN_PROGRESS:
-        if not booking.start_date <= today <= booking.end_date:
-            raise forms.ValidationError("Pickup must be within the booked dates.")
+        from django.conf import settings
+        now = timezone.now()
+        opens = booking.pickup_at - timedelta(minutes=settings.RENTAL_PICKUP_GRACE_MINUTES)
+        if now < opens:
+            raise forms.ValidationError(f"Pickup opens at {clock(opens)}.")
+        if now >= booking.return_at:
+            raise forms.ValidationError(f"The rental window ended at {clock(booking.return_at)}; pickup is no longer possible.")
         if Booking.objects.filter(vehicle=vehicle, status=Booking.Status.IN_PROGRESS).exists():
             raise forms.ValidationError("Record the previous rental's return before pickup.")
         if not payments.payment_settled(booking):
@@ -99,6 +106,11 @@ def transition_booking(actor, booking_id, destination, allowed, *, owner=False):
     announce_transition(booking, destination, **extra)
     logger.info("booking_status_changed booking_id=%s actor_id=%s status=%s", booking.pk, actor.pk, destination)
     return booking
+
+
+def clock(moment):
+    local = timezone.localtime(moment)
+    return f"{local:%H:%M} on {local.day} {local:%b}"
 
 
 def announce_transition(booking, destination, **extra):

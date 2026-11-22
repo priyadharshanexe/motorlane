@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import time, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import Booking, Vehicle
-from .testing import make_profile
+from .testing import make_profile, starting_soon
 
 
 CHECKOUT = {"contact_name": "Test renter", "contact_phone": "+91 99999 00000", "accepted_conditions": True}
@@ -18,9 +18,10 @@ class BookingPermissionsTests(TestCase):
         vehicle = Vehicle.objects.create(
             owner=self.owner, name="Car", vehicle_type="Car", price_per_day=100
         )
+        start, end, pickup, dropoff = starting_soon()
         self.booking = Booking.objects.create(
-            user=self.renter, vehicle=vehicle, start_date=timezone.localdate(),
-            end_date=timezone.localdate(), total_price=100
+            user=self.renter, vehicle=vehicle, start_date=start, end_date=end,
+            pickup_time=pickup, return_time=dropoff, total_price=100
         )
 
     def sign_in(self, user):
@@ -79,9 +80,10 @@ class BookingPermissionsTests(TestCase):
 
     def test_booking_rejects_overlap_and_prices_one_day(self):
         self.sign_in(self.renter)
-        today = timezone.localdate()
+        today = timezone.localdate() + timedelta(days=1)
         self.booking.start_date = self.booking.end_date = today
-        self.booking.save(update_fields=["start_date", "end_date"])
+        self.booking.pickup_time, self.booking.return_time = time(9), time(18)
+        self.booking.save(update_fields=["start_date", "end_date", "pickup_time", "return_time"])
         url = reverse("api_bookings")
         response = self.client.post(url, {**CHECKOUT, "vehicle_id": self.booking.vehicle_id, "start_date": today, "end_date": today})
         self.assertContains(response, "Vehicle already booked for these dates.", status_code=409)
