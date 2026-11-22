@@ -169,3 +169,9 @@ payment_webhook = extend_schema(
     responses={200: inline_serializer("WebhookResult", {"result": s.ChoiceField(["processed", "duplicate", "ignored"])}),
                400: Detail},
 )
+payment_config = extend_schema(
+    tags=[TAG_PAY], summary="Active payment provider and checkout settings", auth=[],
+    responses=inline_serializer("PaymentConfig", {
+        "provider": s.ChoiceField(["fake", "razorpay"]), "key_id": s.CharField(help_text="Razorpay test key id; empty for fake."),
+        "currency": s.CharField(), "demo": s.BooleanField(), "label": s.CharField()}),
+)

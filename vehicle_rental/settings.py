@@ -226,6 +226,12 @@ RENTAL_CANCELLATION_FEE_PERCENT = env_int("RENTAL_CANCELLATION_FEE_PERCENT", 20)
 
 # Payments: Razorpay TEST mode when test keys are configured, otherwise a built-in fake
 # provider with the same interface. Live keys are refused (see rental/payments/).
+# Which payment provider runs. There is no implicit fallback: "fake" (built-in, no money
+# moves) is allowed only with DEBUG on or on a deliberate demo deployment
+# (DJANGO_DEMO_MODE=1, which also labels payments "Demo payment, no real money" in the UI);
+# "razorpay" needs rzp_test_ keys. `manage.py check` refuses anything else.
+PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "fake" if DEBUG else "").strip().lower()
+DEMO_MODE = os.getenv("DJANGO_DEMO_MODE") == "1"
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
 PAYMENT_WEBHOOK_SECRET = os.getenv("PAYMENT_WEBHOOK_SECRET", "")

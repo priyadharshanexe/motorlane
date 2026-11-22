@@ -106,12 +106,26 @@ def derived_secret(purpose):
     return sign(settings.SECRET_KEY, f"motorlane-fake-payments:{purpose}")
 
 
+def fake_payments_allowed():
+    return settings.DEBUG or settings.DEMO_MODE
+
+
 def get_provider():
+    """The configured provider. Never falls back: a misconfiguration raises instead of faking payments."""
+    name = settings.PAYMENT_PROVIDER
     key_id, key_secret = settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET
     if key_id.startswith("rzp_live_"):
         raise ImproperlyConfigured("Live Razorpay keys are not allowed. Use rzp_test_ keys only.")
-    if key_id and key_secret:
-        if not key_id.startswith("rzp_test_"):
-            raise ImproperlyConfigured("RAZORPAY_KEY_ID must be a test key (rzp_test_...).")
+    if name == "razorpay":
+        if not (key_id.startswith("rzp_test_") and key_secret and settings.PAYMENT_WEBHOOK_SECRET):
+            raise ImproperlyConfigured(
+                "PAYMENT_PROVIDER=razorpay needs RAZORPAY_KEY_ID (rzp_test_...), RAZORPAY_KEY_SECRET "
+                "and PAYMENT_WEBHOOK_SECRET.")
         return RazorpayTestProvider(key_id, key_secret, settings.PAYMENT_WEBHOOK_SECRET)
-    return FakeProvider(derived_secret("checkout"), settings.PAYMENT_WEBHOOK_SECRET or derived_secret("webhook"))
+    if name == "fake":
+        if not fake_payments_allowed():
+            raise ImproperlyConfigured(
+                "The fake payment provider marks bookings paid without money moving. It runs only with "
+                "DJANGO_DEBUG=1 or on a demo deployment (DJANGO_DEMO_MODE=1).")
+        return FakeProvider(derived_secret("checkout"), settings.PAYMENT_WEBHOOK_SECRET or derived_secret("webhook"))
+    raise ImproperlyConfigured("Set PAYMENT_PROVIDER to 'fake' or 'razorpay'.")

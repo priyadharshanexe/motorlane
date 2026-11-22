@@ -521,3 +521,21 @@ def fleet_photo_order(request, pk):
     except ValidationError as error:
         return Response({"order": error.messages}, status=400)
     return Response(PhotoSerializer(vehicle.photos.all(), many=True, context={"request": request}).data)
+
+
+@schema.payment_config
+@api_view(["GET"])
+@authentication_classes(SESSION_AUTH)
+@permission_classes(PUBLIC)
+def payment_config(request):
+    """Which checkout the client must run: the demo provider or Razorpay Checkout in test mode."""
+    from .payments.providers import get_provider
+    provider = get_provider()
+    demo = provider.name == "fake"
+    return Response({
+        "provider": provider.name,
+        "key_id": "" if demo else provider.key_id,
+        "currency": settings.PAYMENT_CURRENCY,
+        "demo": demo,
+        "label": "Demo payment, no real money" if demo else "Razorpay test mode, no real money",
+    })

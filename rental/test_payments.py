@@ -16,7 +16,7 @@ from .testing import make_profile
 WEBHOOK_SECRET = "whsec-test-only"
 
 
-@override_settings(PAYMENT_WEBHOOK_SECRET=WEBHOOK_SECRET, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="",
+@override_settings(PAYMENT_PROVIDER="fake", DEMO_MODE=True, PAYMENT_WEBHOOK_SECRET=WEBHOOK_SECRET, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="",
                    RENTAL_FREE_CANCELLATION_HOURS=48, RENTAL_CANCELLATION_FEE_PERCENT=20)
 class PaymentFlowTests(TestCase):
     def setUp(self):
@@ -128,7 +128,7 @@ class PaymentFlowTests(TestCase):
         self.assertEqual(Payment.objects.get().status, "paid")
 
 
-@override_settings(PAYMENT_WEBHOOK_SECRET=WEBHOOK_SECRET, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
+@override_settings(PAYMENT_PROVIDER="fake", DEMO_MODE=True, PAYMENT_WEBHOOK_SECRET=WEBHOOK_SECRET, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
 class WebhookTests(TestCase):
     def setUp(self):
         renter = make_profile("hook-renter")
@@ -185,11 +185,31 @@ class WebhookTests(TestCase):
 
 
 class ProviderSelectionTests(TestCase):
-    @override_settings(RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
-    def test_fake_provider_without_keys(self):
+    @override_settings(PAYMENT_PROVIDER="fake", DEMO_MODE=True, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
+    def test_fake_provider_when_explicitly_chosen(self):
         self.assertIsInstance(get_provider(), FakeProvider)
 
-    @override_settings(RAZORPAY_KEY_ID="rzp_test_abc", RAZORPAY_KEY_SECRET="test-secret")
+    @override_settings(PAYMENT_PROVIDER="fake", DEBUG=False, DEMO_MODE=False)
+    def test_fake_provider_is_refused_outside_debug_and_demo(self):
+        from django.core.checks import run_checks
+        with self.assertRaises(ImproperlyConfigured):
+            get_provider()
+        self.assertIn("rental.E009", {m.id for m in run_checks()})
+
+    @override_settings(PAYMENT_PROVIDER="", RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
+    def test_there_is_no_implicit_fallback(self):
+        from django.core.checks import run_checks
+        with self.assertRaises(ImproperlyConfigured):
+            get_provider()
+        self.assertIn("rental.E008", {m.id for m in run_checks()})
+
+    @override_settings(PAYMENT_PROVIDER="razorpay", RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
+    def test_razorpay_without_keys_does_not_degrade_to_fake(self):
+        with self.assertRaises(ImproperlyConfigured):
+            get_provider()
+
+    @override_settings(PAYMENT_PROVIDER="razorpay", RAZORPAY_KEY_ID="rzp_test_abc", RAZORPAY_KEY_SECRET="test-secret",
+                       PAYMENT_WEBHOOK_SECRET="whsec")
     def test_razorpay_test_keys_use_razorpay_and_post_paise(self):
         provider = get_provider()
         self.assertIsInstance(provider, RazorpayTestProvider)
@@ -205,3 +225,62 @@ class ProviderSelectionTests(TestCase):
     def test_live_keys_are_refused(self):
         with self.assertRaises(ImproperlyConfigured):
             get_provider()
+
+
+RAZORPAY_TEST = dict(PAYMENT_PROVIDER="razorpay", RAZORPAY_KEY_ID="rzp_test_unit", RAZORPAY_KEY_SECRET="unit-test-secret",
+                     PAYMENT_WEBHOOK_SECRET=WEBHOOK_SECRET)
+
+
+class PaymentConfigTests(TestCase):
+    @override_settings(PAYMENT_PROVIDER="fake", DEMO_MODE=True)
+    def test_fake_mode_is_labelled_as_a_demo(self):
+        data = self.client.get(reverse("api_payment_config"), secure=True).json()
+        self.assertEqual((data["provider"], data["demo"], data["key_id"]), ("fake", True, ""))
+        self.assertEqual(data["label"], "Demo payment, no real money")
+
+    @override_settings(**RAZORPAY_TEST)
+    def test_razorpay_mode_exposes_only_the_public_key_id(self):
+        data = self.client.get(reverse("api_payment_config"), secure=True).json()
+        self.assertEqual((data["provider"], data["demo"], data["key_id"]), ("razorpay", False, "rzp_test_unit"))
+        self.assertNotIn("unit-test-secret", str(data))
+
+
+@override_settings(**RAZORPAY_TEST)
+class RazorpayCheckoutTests(TestCase):
+    """Razorpay test mode end to end, with the Razorpay API mocked (no network, no real keys)."""
+
+    def setUp(self):
+        self.owner = make_profile("rzp-owner")
+        self.renter = make_profile("rzp-renter")
+        vehicle = Vehicle.objects.create(owner=self.owner, name="City", vehicle_type="Car", price_per_day=1000, deposit=500)
+        day = timezone.localdate() + timedelta(days=6)
+        self.booking = reserve_vehicle(self.renter.pk, vehicle.pk, day, day)
+        Booking.objects.filter(pk=self.booking.pk).update(status=Booking.Status.CONFIRMED)
+        self.client.force_login(self.renter.user)
+
+    def start(self):
+        with patch("requests.post") as post:
+            post.return_value.status_code = 200
+            post.return_value.json.return_value = {"id": "order_TEST123"}
+            response = self.client.post(reverse("api_payment_start", args=[self.booking.pk]), secure=True)
+        self.assertEqual(post.call_args.args[0], "https://api.razorpay.com/v1/orders")
+        return response.json()
+
+    def test_order_then_signed_checkout_result_marks_paid(self):
+        options = self.start()
+        self.assertEqual(options, {"provider": "razorpay", "key_id": "rzp_test_unit", "order_id": "order_TEST123",
+                                   "amount": 150000, "currency": "INR"})
+        self.assertEqual(self.client.post(reverse("api_payment_fake_checkout", args=[self.booking.pk]),
+                                          secure=True).status_code, 404)
+        result = {"order_id": "order_TEST123", "payment_id": "pay_TEST456",
+                  "signature": sign("unit-test-secret", "order_TEST123|pay_TEST456")}
+        response = self.client.post(reverse("api_payment_confirm", args=[self.booking.pk]), result, secure=True)
+        self.assertEqual(response.json()["status"], "paid")
+        self.assertEqual(Payment.objects.get().payment_id, "pay_TEST456")
+
+    def test_signature_made_with_another_secret_is_rejected(self):
+        self.start()
+        forged = {"order_id": "order_TEST123", "payment_id": "pay_X", "signature": sign("other", "order_TEST123|pay_X")}
+        self.assertEqual(self.client.post(reverse("api_payment_confirm", args=[self.booking.pk]), forged,
+                                          secure=True).status_code, 400)
+        self.assertEqual(Payment.objects.get().status, "created")

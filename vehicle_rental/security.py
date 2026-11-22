@@ -11,7 +11,7 @@ from django.conf import settings
 
 
 def build_policy(nonce):
-    razorpay = bool(settings.RAZORPAY_KEY_ID)
+    razorpay = settings.PAYMENT_PROVIDER == "razorpay"
     directives = {
         "default-src": ["'self'"],
         "script-src": ["'self'", f"'nonce-{nonce}'", *(["https://checkout.razorpay.com"] if razorpay else [])],

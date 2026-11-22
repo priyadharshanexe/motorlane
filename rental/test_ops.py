@@ -40,7 +40,7 @@ class SecurityHeaderTests(TestCase):
         other = self.client.get("/accounts/password/reset/", secure=True)["Content-Security-Policy"]
         self.assertNotEqual(nonce, other.split("'nonce-")[1].split("'")[0])
 
-    @override_settings(RAZORPAY_KEY_ID="rzp_test_x")
+    @override_settings(PAYMENT_PROVIDER="razorpay", RAZORPAY_KEY_ID="rzp_test_x")
     def test_razorpay_checkout_is_allowed_only_in_razorpay_mode(self):
         self.assertIn("https://checkout.razorpay.com", self.client.get("/healthz")["Content-Security-Policy"])
 

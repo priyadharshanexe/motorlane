@@ -20,6 +20,16 @@ def rental_policy(app_configs, **kwargs):
     for minimum, percent in settings.RENTAL_LONG_RENTAL_DISCOUNTS:
         if minimum < 1 or not 0 <= percent < 100:
             errors.append(Error("Long-rental discounts need a minimum of 1+ days and 0-99 percent.", id="rental.E004"))
+    provider = settings.PAYMENT_PROVIDER
+    if provider not in ("fake", "razorpay"):
+        errors.append(Error("Set PAYMENT_PROVIDER to 'fake' or 'razorpay'; there is no default outside debug.",
+                            id="rental.E008"))
+    elif provider == "fake" and not (settings.DEBUG or settings.DEMO_MODE):
+        errors.append(Error(
+            "PAYMENT_PROVIDER=fake would mark unpaid rentals as paid. It is refused unless DJANGO_DEBUG=1 or this "
+            "is a deliberate demo deployment (DJANGO_DEMO_MODE=1).", id="rental.E009"))
+    elif provider == "razorpay" and not settings.RAZORPAY_KEY_ID:
+        errors.append(Error("PAYMENT_PROVIDER=razorpay needs RAZORPAY_KEY_ID.", id="rental.E010"))
     key = settings.RAZORPAY_KEY_ID
     if key.startswith("rzp_live_"):
         errors.append(Error("Live Razorpay keys are refused. Use rzp_test_ keys only.", id="rental.E005"))

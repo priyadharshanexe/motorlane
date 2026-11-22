@@ -24,6 +24,7 @@ urlpatterns = [
     path("bookings/<int:pk>/payment/confirm/", api.payment_confirm, name="api_payment_confirm"),
     path("bookings/<int:pk>/payment/fake-checkout/", api.payment_fake_checkout, name="api_payment_fake_checkout"),
     path("bookings/<int:pk>/cancellation/", api.cancellation_preview, name="api_cancellation_preview"),
+    path("payments/config/", api.payment_config, name="api_payment_config"),
     path("payments/webhook/", api.payment_webhook, name="api_payment_webhook"),
     path("bookings/<int:pk>/review/", api.review, name="api_review"),
     path("bookings/<int:pk>/<str:action>/", api.booking_action, name="api_booking_action"),

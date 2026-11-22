@@ -47,9 +47,12 @@ Pricing: weekend rate for Saturdays and Sundays when set, 10% off 7+ days and
 20% off 30+ days, and a refundable deposit shown as its own line. The quote is
 returned line by line and stored on the booking.
 
-Payments (test only): after approval the renter pays rental plus deposit
-through the built-in fake provider, or Razorpay when `rzp_test_` keys are set
-(live keys are refused). Pickup needs a completed payment. Cancelling at least
+Payments (test only): after approval the renter pays rental plus deposit.
+`PAYMENT_PROVIDER` picks the provider explicitly, with no fallback: `razorpay`
+opens Razorpay Checkout in test mode (`rzp_test_` keys; live keys are refused),
+and `fake` is a demo provider that `manage.py check` refuses unless
+`DJANGO_DEBUG=1` or `DJANGO_DEMO_MODE=1`, in which case the UI labels it
+"Demo payment, no real money". Pickup needs a completed payment. Cancelling at least
 48 hours before pickup refunds everything; later, 20% of the rental is kept and
 the deposit is returned. The deposit is refunded at return. Webhooks are
 verified by HMAC signature and each provider event id is applied once.
