@@ -10,6 +10,39 @@ import "./lab.css";
 
 type Theme = "dark" | "light";
 
+const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** True while the page is being scrolled (and for a short moment after), so hover effects don't fire
+ *  when content slides under a still cursor. One listener for the whole lab. */
+const scrolling = { active: false, timer: 0 };
+if (typeof window !== "undefined") {
+  window.addEventListener("scroll", () => {
+    scrolling.active = true;
+    window.clearTimeout(scrolling.timer);
+    scrolling.timer = window.setTimeout(() => { scrolling.active = false; }, 180);
+  }, { passive: true });
+}
+
+/** Run `onEnter` once, the first time the element is at least `threshold` visible. */
+function useRevealOnce<T extends Element>(onEnter: () => void, threshold = 0.35) {
+  const ref = useRef<T>(null);
+  const callback = useRef(onEnter);
+  useEffect(() => { callback.current = onEnter; });
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        observer.disconnect();
+        callback.current();
+      }
+    }, { threshold });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [threshold]);
+  return ref;
+}
+
 const FONTS = "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&family=Public+Sans:wght@400;600&display=swap";
 
 export default function Lab() {
@@ -82,18 +115,39 @@ function Hero() {
   const vehicles = useVehicles(type);
   const count = String(vehicles.data?.count ?? 0).padStart(3, "0");
   const road = useRef<HTMLDivElement>(null);
-  // Scroll speeds the road up: lane dashes move faster while you scroll, then settle.
+  const dashes = useRef<HTMLSpanElement>(null);
+  // The road "drives" at a cruising speed and accelerates with scroll velocity, then eases back.
+  // Distance is integrated every frame, so the dashes never jump when the speed changes, and only
+  // the dash strip's transform is written (compositor-only, no style recalculation of the page).
   useEffect(() => {
-    let speed = 1, last = window.scrollY, frame = 0;
-    const tick = () => {
-      const delta = Math.abs(window.scrollY - last);
-      last = window.scrollY;
-      speed += (1 + Math.min(delta, 60) / 6 - speed) * 0.08;
-      road.current?.style.setProperty("--speed", speed.toFixed(2));
-      frame = requestAnimationFrame(tick);
+    const strip = dashes.current, section = road.current;
+    if (!strip || !section || prefersReducedMotion()) return;
+    const CYCLE = 82, CRUISE = 70, MAX = 900;          // px of road per second
+    let distance = 0, speed = CRUISE, scrollVelocity = 0, lastY = window.scrollY, lastScroll = performance.now();
+    let previous = 0, frame = 0, visible = true;
+    const onScroll = () => {
+      const now = performance.now(), dt = Math.max(16, now - lastScroll);
+      scrollVelocity = Math.min(MAX, Math.abs(window.scrollY - lastY) / dt * 1000);
+      lastY = window.scrollY;
+      lastScroll = now;
     };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    const tick = (now: number) => {
+      const dt = previous ? Math.min(0.05, (now - previous) / 1000) : 0;
+      previous = now;
+      scrollVelocity *= Math.exp(-dt * 4);              // scroll impulse fades out
+      const target = CRUISE + scrollVelocity * 0.8;
+      speed += (target - speed) * (1 - Math.exp(-dt * 5)); // critically damped follow, frame-rate independent
+      distance = (distance + speed * dt) % CYCLE;
+      strip.style.transform = `translate3d(0, ${(distance - CYCLE).toFixed(2)}px, 0)`;
+      if (visible) frame = requestAnimationFrame(tick);
+    };
+    const observer = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      if (visible) { previous = 0; cancelAnimationFrame(frame); frame = requestAnimationFrame(tick); }
+    });
+    observer.observe(section);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); window.removeEventListener("scroll", onScroll); };
   }, []);
   return (
     <section className="lab-hero">
@@ -102,7 +156,7 @@ function Hero() {
         <p>Cars and bikes from local owners across Tamil Nadu. Pick a time, watch the price, take the keys.</p>
       </div>
       <div className="lab-road" ref={road}>
-        <div className="lab-road-surface"><span className="lab-road-dashes" /></div>
+        <div className="lab-road-surface"><span className="lab-road-dashes" ref={dashes} /></div>
         <div className="lab-counter">
           <small>Free right now</small>
           <Odometer value={count} />
@@ -143,16 +197,35 @@ function Catalog() {
 
 function KeyTag({ vehicle, index }: { vehicle: Vehicle; index: number }) {
   const ref = useRef<HTMLElement>(null);
+  const armed = useRef(true);
+  // A tag swings when a person moves the pointer onto it, never because the page scrolled it under a
+  // resting cursor; it swings once per visit and settles on its own.
   const tilt = (event: ReactPointerEvent) => {
-    const box = ref.current!.getBoundingClientRect();
+    const tag = ref.current!;
+    if (event.pointerType !== "mouse" || scrolling.active) return;
+    if (armed.current && !prefersReducedMotion()) {
+      armed.current = false;
+      tag.classList.remove("swinging");
+      void tag.offsetWidth;  // restart the swing keyframes
+      tag.classList.add("swinging");
+    }
+    const box = tag.getBoundingClientRect();
     const x = (event.clientX - box.left) / box.width - 0.5, y = (event.clientY - box.top) / box.height - 0.5;
-    ref.current!.style.setProperty("--tx", `${(y * -6).toFixed(2)}deg`);
-    ref.current!.style.setProperty("--ty", `${(x * 8).toFixed(2)}deg`);
+    tag.style.setProperty("--tx", `${(y * -5).toFixed(2)}deg`);
+    tag.style.setProperty("--ty", `${(x * 7).toFixed(2)}deg`);
+    tag.classList.add("lifted");
   };
-  const reset = () => { ref.current!.style.setProperty("--tx", "0deg"); ref.current!.style.setProperty("--ty", "0deg"); };
+  const reset = () => {
+    const tag = ref.current!;
+    armed.current = true;
+    tag.classList.remove("lifted");
+    tag.style.setProperty("--tx", "0deg");
+    tag.style.setProperty("--ty", "0deg");
+  };
   const cover = vehicle.cover;
   return (
     <article className="lab-tag" ref={ref} onPointerMove={tilt} onPointerLeave={reset}
+      onAnimationEnd={event => event.currentTarget.classList.remove("swinging")}
       style={{ "--hang": `${[-1.4, 0.6, 1.2, -0.8, 1.6, -1.1][index % 6]}deg` } as CSSProperties}>
       <span className="lab-tag-hole" aria-hidden="true" />
       {cover ? <img src={cover.small} srcSet={`${cover.small} 400w, ${cover.large} 1200w`} sizes="(max-width: 700px) 100vw, 400px"
@@ -195,31 +268,34 @@ function Trip() {
 function TimelineRoad({ pathRef }: { pathRef: React.RefObject<SVGPathElement | null> }) {
   const car = useRef<SVGGElement>(null);
   const [reached, setReached] = useState(0);
-  // The road draws itself to the current stop (stop 3 of 4), with the car following the path.
-  useEffect(() => {
+  const draw = () => {
+    // The road draws to the current stop (3 of 4) the first time it scrolls into view, with the car
+    // following the path. Only the path's dash and the car's transform change per frame; React state
+    // changes three times in total, once per stop reached.
     const path = pathRef.current, marker = car.current;
     if (!path || !marker) return;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const total = path.getTotalLength(), target = total * 0.62, duration = reduce ? 0 : 2400;
+    const total = path.getTotalLength(), target = total * 0.62;
     const stops = [0, 0.27, 0.62].map(f => f * total);
+    const duration = prefersReducedMotion() ? 0 : 2200;
     const start = performance.now();
-    let frame = 0;
+    let shown = 0;
     const step = (now: number) => {
       const t = duration ? Math.min(1, (now - start) / duration) : 1;
       const eased = 1 - Math.pow(1 - t, 3);
       const length = target * eased;
-      path.style.strokeDasharray = `${length} ${total}`;
+      path.style.strokeDasharray = `${length.toFixed(1)} ${total.toFixed(1)}`;
       const point = path.getPointAtLength(length);
-      marker.setAttribute("transform", `translate(${point.x} ${point.y})`);
-      setReached(stops.filter(s => s <= length + 1).length);
-      if (t < 1) frame = requestAnimationFrame(step);
+      marker.setAttribute("transform", `translate(${point.x.toFixed(1)} ${point.y.toFixed(1)})`);
+      const count = stops.filter(s => s <= length + 1).length;
+      if (count !== shown) { shown = count; setReached(count); }
+      if (t < 1) requestAnimationFrame(step);
     };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [pathRef]);
+    requestAnimationFrame(step);
+  };
+  const wrapper = useRevealOnce<HTMLDivElement>(draw);
   const d = "M60 20 C 60 160, 100 200, 100 300 S 60 440, 60 560 S 100 680, 100 740";
   return (
-    <div className="lab-timeline">
+    <div className="lab-timeline" ref={wrapper}>
       <svg viewBox="0 0 160 760" aria-hidden="true">
         <path d={d} className="lab-asphalt" />
         <path d={d} className="lab-ghost-lane" />
