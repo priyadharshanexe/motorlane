@@ -227,7 +227,7 @@ function Hud() {
   // The hero has its own speedometer and trip meter, so the HUD stays out of the way there and slides in once the
   // hero has mostly scrolled away.
   useLayoutEffect(() => {
-    const trigger = ScrollTrigger.create({ trigger: ".lab-hero", start: "top top", end: "bottom 55%",
+    const trigger = ScrollTrigger.create({ trigger: ".lab-hero", start: "top bottom", end: "bottom 55%",  // starts before scroll 0, so the very top counts
       onToggle: self => hud.current?.classList.toggle("away", self.isActive) });
     hud.current?.classList.toggle("away", window.scrollY < trigger.end);
     return () => trigger.kill();
