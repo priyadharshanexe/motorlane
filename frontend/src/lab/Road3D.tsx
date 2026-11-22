@@ -1,89 +1,294 @@
-// The hero's signature 3D moment: a procedural road (no downloaded models) seen from the driver's seat.
-// Lane dashes stream towards the camera at the shared `drive` speed and stretch into streaks as it rises;
-// kerb posts and kilometre markers flick past at the edges. DPR is capped, the frame loop stops when the
-// hero is offscreen, and this file is lazy-loaded so it never delays the first paint.
+// The hero's signature 3D moment: a Tamil Nadu highway seen from the driver's seat, built only from primitives
+// (no downloaded models). Everything near the road streams past at the shared `drive` speed, so scenery adds
+// parallax and makes speed visible:
+//   near:   lane dashes, reflector posts with cat's-eyes, milestones (white, yellow top, real catalog cities),
+//           a guard rail in stretches;
+//   middle: coconut palms, roadside trees, streetlights (pools of light at night), paddy-field rows;
+//   far:    a low Western Ghats ridge and a temple gopuram on the horizon, drifting slowly; a moon at night.
+// Night is dark mode, day is light mode. Instanced meshes, recycled positions, DPR capped, the frame loop stops
+// when the hero is offscreen, and this file is lazy-loaded so it never delays the first paint.
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { drive } from "./drive";
 
-const DASHES = 26, SPACING = 6, POSTS = 18, POST_SPACING = 9;
+const NEAR = 4;  // camera z; objects recycle from here back to NEAR - period
+/** z for item i of a recycled row: moves towards the camera as `travel` grows and wraps every `period`. */
+const zOf = (i: number, spacing: number, period: number, travel: number) =>
+  NEAR - ((((i * spacing - travel) % period) + period) % period);
 
-function Scene({ light }: { light: boolean }) {
-  const dashes = useRef<THREE.InstancedMesh>(null);
-  const posts = useRef<THREE.InstancedMesh>(null);
+type Palette = ReturnType<typeof palette>;
+const palette = (light: boolean) => light ? {
+  skyTop: "#E6DDC8", skyLow: "#F7EFDD", road: "#3A3D42", edge: "#F4F1EA", lane: "#FFC531", post: "#ECE7DA",
+  eye: "#C9761A", field: "#9DBB6A", paddy: "#7FA552", trunk: "#8A6B4A", leaf: "#4F8A3B", tree: "#5C8C45",
+  hill: "#B4B99A", hill2: "#C7C6AA", gopuram: "#BFAE8D", rail: "#C9CCD0", lamp: "#D8D4CB", pool: "#000000",
+  shadow: 0.22, poolOpacity: 0, moon: false,
+} : {
+  skyTop: "#0E1013", skyLow: "#2A251D", road: "#1C1F23", edge: "#D8D4CB", lane: "#FFC531", post: "#3A3F46",
+  eye: "#FFB020", field: "#141E17", paddy: "#1A2A1F", trunk: "#2E2820", leaf: "#183022", tree: "#15291C",
+  hill: "#22231F", hill2: "#2B2A24", gopuram: "#332F27", rail: "#4A4F56", lamp: "#FFE6A8", pool: "#FFC970",
+  shadow: 0, poolOpacity: 0.2, moon: true,
+};
+
+/** A soft round blob (light pools at night, contact shadows by day). */
+function radialTexture() {
+  const canvas = Object.assign(document.createElement("canvas"), { width: 64, height: 64 });
+  const g = canvas.getContext("2d")!;
+  const gradient = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gradient.addColorStop(0, "rgba(255,255,255,1)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = gradient;
+  g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(canvas);
+}
+
+function skyTexture(colors: Palette) {
+  const canvas = Object.assign(document.createElement("canvas"), { width: 4, height: 128 });
+  const g = canvas.getContext("2d")!;
+  const gradient = g.createLinearGradient(0, 0, 0, 128);
+  gradient.addColorStop(0, colors.skyTop);
+  gradient.addColorStop(1, colors.skyLow);
+  g.fillStyle = gradient;
+  g.fillRect(0, 0, 4, 128);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** An Indian highway milestone face: yellow cap, white body, stencilled place and kilometres. */
+function milestoneTexture(place: string, km: number) {
+  const canvas = Object.assign(document.createElement("canvas"), { width: 128, height: 176 });
+  const g = canvas.getContext("2d")!;
+  g.fillStyle = "#F2EFE8";
+  g.fillRect(0, 0, 128, 176);
+  g.fillStyle = "#FFC531";
+  g.beginPath();
+  g.moveTo(0, 64); g.lineTo(0, 46); g.arc(64, 46, 64, Math.PI, 0); g.lineTo(128, 64); g.closePath();
+  g.fill();
+  g.fillStyle = "#16181B";
+  g.textAlign = "center";
+  const name = place.toUpperCase();
+  g.font = "bold 22px 'JetBrains Mono', monospace";
+  const width = g.measureText(name).width;
+  g.save();
+  g.translate(64, 98);
+  if (width > 116) g.scale(116 / width, 1);
+  g.fillText(name, 0, 0);
+  g.restore();
+  g.font = "bold 44px 'JetBrains Mono', monospace";
+  g.fillText(String(km), 64, 152);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+/** A flat silhouette from an outline (x, y pairs), standing on y = 0. */
+function silhouette(points: number[]) {
+  const shape = new THREE.Shape();
+  shape.moveTo(points[0], 0);
+  for (let i = 0; i < points.length; i += 2) shape.lineTo(points[i], points[i + 1]);
+  shape.lineTo(points[points.length - 2], 0);
+  return new THREE.ShapeGeometry(shape);
+}
+
+// A low ridge (Western Ghats) one tile wide; two tiles side by side wrap seamlessly.
+const RIDGE_W = 260;
+const ridge = (seed: number) => {
+  const points: number[] = [];
+  for (let x = 0; x <= RIDGE_W; x += 10) {
+    const y = 7 + Math.sin((x / RIDGE_W) * Math.PI * 4 + seed) * 3 + Math.sin((x / RIDGE_W) * Math.PI * 10 + seed * 2) * 1.4;
+    points.push(x - RIDGE_W / 2, y);
+  }
+  return silhouette(points);
+};
+// A stepped temple gopuram: tiers narrowing upwards, a barrel roof and finials.
+const gopuram = () => {
+  const tiers = 7, base = 9, height = 15;
+  const left: number[] = [], right: number[] = [];
+  for (let i = 0; i <= tiers; i++) {
+    const half = base / 2 - i * 0.5, y = (i / tiers) * height;
+    left.push(-half, y, -half + 0.3, y);
+    right.unshift(half - 0.3, y, half, y);
+  }
+  return silhouette([...left, -1.4, height + 1.6, -0.6, height + 2.2, 0, height + 3, 0.6, height + 2.2, 1.4, height + 1.6, ...right]);
+};
+
+const DASHES = 26, DASH_SPACING = 6;
+const POSTS = 20, POST_SPACING = 7;
+const MILESTONES = 5, MILE_SPACING = 32;
+const RAILS = 24, RAIL_SPACING = 5.4;
+const PALMS = 18, PALM_SPACING = 8.5, FRONDS = 5;
+const TREES = 12, TREE_SPACING = 13;
+const LIGHTS = 10, LIGHT_SPACING = 16;
+const ROWS = 32, ROW_SPACING = 3.2;
+
+function Scene({ light, places }: { light: boolean; places: string[] }) {
+  const colors = useMemo(() => palette(light), [light]);
   const { camera } = useThree();
   const temp = useMemo(() => new THREE.Object3D(), []);
-  const offset = useRef(0);
-  const colors = light
-    ? { road: "#3A3D42", edge: "#F4F1EA", lane: "#FFC531", post: "#E9E4D8", sky: "#E8E4DA" }
-    : { road: "#1C1F23", edge: "#D8D4CB", lane: "#FFC531", post: "#3A3F46", sky: "#121417" };
+  const blob = useMemo(radialTexture, []);
+  const sky = useMemo(() => skyTexture(colors), [colors]);
+  const ridgeNear = useMemo(() => ridge(0.6), []), ridgeFar = useMemo(() => ridge(2.1), []);
+  const temple = useMemo(gopuram, []);
+  const key = places.join("|");
+  const milestones = useMemo(() => Array.from({ length: MILESTONES }, (_, i) => {
+    const place = key.split("|")[i % places.length];
+    return milestoneTexture(place, 12 + ((place.length * 37 + i * 53) % 180));
+  }), [key, places.length]);
+  useEffect(() => () => milestones.forEach(t => t.dispose()), [milestones]);
+  useEffect(() => () => sky.dispose(), [sky]);
+
+  const dashes = useRef<THREE.InstancedMesh>(null), posts = useRef<THREE.InstancedMesh>(null), eyes = useRef<THREE.InstancedMesh>(null);
+  const rails = useRef<THREE.InstancedMesh>(null), trunks = useRef<THREE.InstancedMesh>(null), fronds = useRef<THREE.InstancedMesh>(null);
+  const canopies = useRef<THREE.InstancedMesh>(null), treeTrunks = useRef<THREE.InstancedMesh>(null), poles = useRef<THREE.InstancedMesh>(null);
+  const lamps = useRef<THREE.InstancedMesh>(null), pools = useRef<THREE.InstancedMesh>(null), shadows = useRef<THREE.InstancedMesh>(null);
+  const rows = useRef<THREE.InstancedMesh>(null);
+  const all = [dashes, posts, eyes, rails, trunks, fronds, canopies, treeTrunks, poles, lamps, pools, shadows, rows];
+  const mileGroup = useRef<THREE.Group>(null), ridgeA = useRef<THREE.Group>(null), ridgeB = useRef<THREE.Group>(null);
+  const templeMesh = useRef<THREE.Mesh>(null);
+  const travel = useRef(0);
+
+  const set = (mesh: THREE.InstancedMesh | null, index: number, x: number, y: number, z: number,
+    sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0) => {
+    if (!mesh) return;
+    temp.position.set(x, y, z);
+    temp.rotation.set(rx, ry, rz);
+    temp.scale.set(sx, sy, sz);
+    temp.updateMatrix();
+    mesh.setMatrixAt(index, temp.matrix);
+  };
 
   useFrame((_, delta) => {
     const dt = Math.min(0.05, delta);
-    // Road units per second: a gentle crawl at idle, a rush at full throttle.
-    const speed = 4 + drive.throttle * 70;
-    offset.current = (offset.current + speed * dt) % (SPACING * POST_SPACING * 2);
-    const stretch = 1 + drive.throttle * 3.2;  // dashes turn into streaks with speed
-    for (let i = 0; i < DASHES; i++) {
-      const z = -i * SPACING + (offset.current % SPACING);  // moves towards the camera, wraps every dash
-      temp.position.set(0, 0.011, z);
-      temp.scale.set(1, 1, stretch);
-      temp.updateMatrix();
-      dashes.current!.setMatrixAt(i, temp.matrix);
-    }
-    dashes.current!.instanceMatrix.needsUpdate = true;
+    const throttle = drive.throttle;
+    travel.current += (4 + throttle * 70) * dt;  // road units per second: a crawl at idle, a rush at full throttle
+    const s = travel.current;
+    const stretch = 1 + throttle * 3.2;  // near things smear into streaks with speed
+
+    for (let i = 0; i < DASHES; i++) set(dashes.current, i, 0, 0.011, zOf(i, DASH_SPACING, DASHES * DASH_SPACING, s), 1, 1, stretch);
+
+    // Reflector posts on both edges, alternating, each with a cat's-eye facing the driver.
     for (let i = 0; i < POSTS; i++) {
-      const side = i % 2 ? 1 : -1;
-      const z = -Math.floor(i / 2) * POST_SPACING * 2 - (side > 0 ? POST_SPACING : 0) + (offset.current % (POST_SPACING * 2));
-      temp.position.set(side * 4.6, 0.45, z);
-      temp.scale.set(1, 1, 1 + drive.throttle * 1.5);
-      temp.updateMatrix();
-      posts.current!.setMatrixAt(i, temp.matrix);
+      const side = i % 2 ? 1 : -1, z = zOf(i, POST_SPACING / 2, (POSTS * POST_SPACING) / 2, s);
+      set(posts.current, i, side * 4.45, 0.4, z, 1, 1, 1 + throttle * 1.5);
+      set(eyes.current, i, side * 4.45, 0.62, z + 0.07, 1, 1, 1 + throttle * 2.5);
     }
-    posts.current!.instanceMatrix.needsUpdate = true;
+    // Guard rail on the left in stretches (scaled to nothing in the gaps).
+    for (let i = 0; i < RAILS; i++) {
+      const on = i % 12 < 6 ? 1 : 0;
+      set(rails.current, i, -4.9, 0.55, zOf(i, RAIL_SPACING, RAILS * RAIL_SPACING, s), on, on, on);
+    }
+    // Milestones on the right.
+    mileGroup.current?.children.forEach((stone, i) => { stone.position.z = zOf(i, MILE_SPACING, MILESTONES * MILE_SPACING, s + 11); });
+    // Coconut palms: a leaning trunk and drooping fronds radiating from the crown.
+    for (let i = 0; i < PALMS; i++) {
+      const side = i % 2 ? 1 : -1, z = zOf(i, PALM_SPACING / 2, (PALMS * PALM_SPACING) / 2, s + 3);
+      const x = side * (7.5 + ((i * 37) % 7)), h = 5 + ((i * 13) % 4) * 0.7, lean = side * (0.08 + ((i * 7) % 3) * 0.05);
+      set(trunks.current, i, x + (Math.sin(lean) * h) / 2, h / 2, z, 1, h, 1, 0, 0, -lean);
+      const topX = x + Math.sin(lean) * h, topY = Math.cos(lean) * h;
+      for (let f = 0; f < FRONDS; f++) {
+        const angle = (f / FRONDS) * Math.PI * 2 + i;
+        set(fronds.current, i * FRONDS + f, topX + Math.cos(angle) * 1.1, topY - 0.25, z - Math.sin(angle) * 1.1, 1, 1, 1, 0, angle, -0.45);
+      }
+      set(shadows.current, i, x + side * 0.6, 0.012, z, 3.2, 2.2, 1, -Math.PI / 2);
+    }
+    // Rounder roadside trees further out.
+    for (let i = 0; i < TREES; i++) {
+      const side = i % 2 ? -1 : 1, z = zOf(i, TREE_SPACING / 2, (TREES * TREE_SPACING) / 2, s + 7);
+      const x = side * (14 + ((i * 29) % 9)), r = 1.8 + ((i * 11) % 5) * 0.35;
+      set(treeTrunks.current, i, x, 1.1, z, 1, 2.2, 1);
+      set(canopies.current, i, x, 2.2 + r * 0.8, z, r, r * 0.85, r);
+      set(shadows.current, PALMS + i, x + 0.8, 0.012, z, r * 2.4, r * 1.8, 1, -Math.PI / 2);
+    }
+    // Streetlights alternate sides; at night each throws a warm pool on the tarmac.
+    for (let i = 0; i < LIGHTS; i++) {
+      const side = i % 2 ? 1 : -1, z = zOf(i, LIGHT_SPACING / 2, (LIGHTS * LIGHT_SPACING) / 2, s + 4);
+      set(poles.current, i, side * 5.3, 2.6, z);
+      set(lamps.current, i, side * 4.3, 5.1, z);
+      set(pools.current, i, side * 2.2, 0.015, z, 4.2, 4.2 * (1 + throttle * 0.6), 1, -Math.PI / 2);
+    }
+    // Paddy-field rows on both sides: thin furrows that strobe past and sell the speed.
+    for (let i = 0; i < ROWS; i++) {
+      const side = i % 2 ? 1 : -1;
+      set(rows.current, i, side * 13, 0.006, zOf(i, ROW_SPACING / 2, (ROWS * ROW_SPACING) / 2, s), 1, 1, 1 + throttle * 2);
+    }
+    all.forEach(ref => { if (ref.current) ref.current.instanceMatrix.needsUpdate = true; });
+
+    // Far layer: the ridge and the gopuram drift slowly sideways (a long bend in the road), wrapping seamlessly.
+    const drift = (s * 0.05) % RIDGE_W;
+    if (ridgeA.current) ridgeA.current.position.x = -drift;
+    if (ridgeB.current) ridgeB.current.position.x = RIDGE_W - drift;
+    if (templeMesh.current) templeMesh.current.position.x = 70 - ((s * 0.03) % 140);
+
     // The camera dips and widens slightly with speed: the feeling of acceleration.
-    const target = 58 + drive.throttle * 14;
     const perspective = camera as THREE.PerspectiveCamera;
-    perspective.fov += (target - perspective.fov) * (1 - Math.exp(-dt * 4));
-    perspective.position.y = 1.25 - drive.throttle * 0.18 + Math.sin(performance.now() / 260) * 0.012 * drive.throttle;
+    perspective.fov += (58 + throttle * 14 - perspective.fov) * (1 - Math.exp(-dt * 4));
+    perspective.position.y = 1.25 - throttle * 0.18 + Math.sin(performance.now() / 260) * 0.012 * throttle;
     perspective.updateProjectionMatrix();
   });
 
   return (
     <>
-      <color attach="background" args={[colors.sky]} />
-      <fog attach="fog" args={[colors.sky, 18, 120]} />
-      <mesh rotation-x={-Math.PI / 2} position={[0, 0, -70]}>
-        <planeGeometry args={[8.4, 160]} />
-        <meshBasicMaterial color={colors.road} />
-      </mesh>
+      <color attach="background" args={[colors.skyLow]} />
+      <fog attach="fog" args={[colors.skyLow, 22, 125]} />
+      {/* Sky, moon and horizon skip fog: their colours are already distant. */}
+      <mesh position={[0, 34, -140]}><planeGeometry args={[700, 76]} /><meshBasicMaterial map={sky} fog={false} depthWrite={false} /></mesh>
+      {colors.moon && <mesh position={[38, 26, -138]}><circleGeometry args={[2.6, 32]} /><meshBasicMaterial color="#EFE7D2" fog={false} /></mesh>}
+      <group position={[0, -0.5, -132]}>
+        <group ref={ridgeA}><mesh geometry={ridgeFar} position={[0, 2, -2]}><meshBasicMaterial color={colors.hill2} fog={false} /></mesh></group>
+        <group ref={ridgeB}><mesh geometry={ridgeFar} position={[0, 2, -2]}><meshBasicMaterial color={colors.hill2} fog={false} /></mesh></group>
+        <mesh ref={templeMesh} geometry={temple} position={[34, 0, -1]}><meshBasicMaterial color={colors.gopuram} fog={false} /></mesh>
+        <mesh geometry={ridgeNear} position={[-70, -3, 0]} scale={[1.2, 0.8, 1]}><meshBasicMaterial color={colors.hill} fog={false} /></mesh>
+        <mesh geometry={ridgeNear} position={[190, -3, 0]} scale={[1.2, 0.8, 1]}><meshBasicMaterial color={colors.hill} fog={false} /></mesh>
+      </group>
+
+      {/* ground: fields either side, the road on top */}
+      <mesh rotation-x={-Math.PI / 2} position={[0, -0.01, -60]}><planeGeometry args={[400, 140]} /><meshBasicMaterial color={colors.field} /></mesh>
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0, -60]}><planeGeometry args={[8.4, 140]} /><meshBasicMaterial color={colors.road} /></mesh>
       {[-3.9, 3.9].map(x => (
-        <mesh key={x} rotation-x={-Math.PI / 2} position={[x, 0.01, -70]}>
-          <planeGeometry args={[0.12, 160]} />
-          <meshBasicMaterial color={colors.edge} />
-        </mesh>
+        <mesh key={x} rotation-x={-Math.PI / 2} position={[x, 0.01, -60]}><planeGeometry args={[0.12, 140]} /><meshBasicMaterial color={colors.edge} /></mesh>
       ))}
-      <instancedMesh ref={dashes} args={[undefined, undefined, DASHES]}>
-        <boxGeometry args={[0.16, 0.01, 2.2]} />
-        <meshBasicMaterial color={colors.lane} />
+
+      <instancedMesh ref={rows} args={[undefined, undefined, ROWS]}><boxGeometry args={[14, 0.02, 0.35]} /><meshBasicMaterial color={colors.paddy} /></instancedMesh>
+      <instancedMesh ref={dashes} args={[undefined, undefined, DASHES]}><boxGeometry args={[0.16, 0.01, 2.2]} /><meshBasicMaterial color={colors.lane} /></instancedMesh>
+      <instancedMesh ref={posts} args={[undefined, undefined, POSTS]}><boxGeometry args={[0.12, 0.8, 0.12]} /><meshBasicMaterial color={colors.post} /></instancedMesh>
+      <instancedMesh ref={eyes} args={[undefined, undefined, POSTS]}><boxGeometry args={[0.1, 0.1, 0.02]} /><meshBasicMaterial color={colors.eye} toneMapped={false} /></instancedMesh>
+      <instancedMesh ref={rails} args={[undefined, undefined, RAILS]}><boxGeometry args={[0.06, 0.22, RAIL_SPACING]} /><meshBasicMaterial color={colors.rail} /></instancedMesh>
+      <instancedMesh ref={shadows} args={[undefined, undefined, PALMS + TREES]} visible={colors.shadow > 0}>
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial color="#2A3A1E" alphaMap={blob} transparent opacity={colors.shadow} depthWrite={false} />
       </instancedMesh>
-      <instancedMesh ref={posts} args={[undefined, undefined, POSTS]}>
-        <boxGeometry args={[0.12, 0.9, 0.12]} />
-        <meshBasicMaterial color={colors.post} />
+      <instancedMesh ref={trunks} args={[undefined, undefined, PALMS]}><cylinderGeometry args={[0.1, 0.16, 1, 5]} /><meshBasicMaterial color={colors.trunk} /></instancedMesh>
+      <instancedMesh ref={fronds} args={[undefined, undefined, PALMS * FRONDS]}><boxGeometry args={[2.3, 0.04, 0.42]} /><meshBasicMaterial color={colors.leaf} /></instancedMesh>
+      <instancedMesh ref={treeTrunks} args={[undefined, undefined, TREES]}><cylinderGeometry args={[0.14, 0.2, 1, 5]} /><meshBasicMaterial color={colors.trunk} /></instancedMesh>
+      <instancedMesh ref={canopies} args={[undefined, undefined, TREES]}><icosahedronGeometry args={[1, 0]} /><meshBasicMaterial color={colors.tree} /></instancedMesh>
+      <instancedMesh ref={poles} args={[undefined, undefined, LIGHTS]}><boxGeometry args={[0.1, 5.2, 0.1]} /><meshBasicMaterial color={colors.post} /></instancedMesh>
+      <instancedMesh ref={lamps} args={[undefined, undefined, LIGHTS]}><boxGeometry args={[2, 0.12, 0.22]} /><meshBasicMaterial color={colors.lamp} toneMapped={false} /></instancedMesh>
+      <instancedMesh ref={pools} args={[undefined, undefined, LIGHTS]} visible={colors.poolOpacity > 0}>
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial color={colors.pool} alphaMap={blob} transparent opacity={colors.poolOpacity} blending={THREE.AdditiveBlending} depthWrite={false} />
       </instancedMesh>
+      <group ref={mileGroup}>
+        {milestones.map((texture, i) => (
+          <group key={i} position={[4.95, 0, -i * MILE_SPACING]} rotation-y={-0.5}>
+            <mesh position={[0, 0.45, 0]}><boxGeometry args={[0.62, 0.9, 0.16]} /><meshBasicMaterial color="#E9E5DC" /></mesh>
+            <mesh position={[0, 0.45, 0.081]}><planeGeometry args={[0.62, 0.86]} /><meshBasicMaterial map={texture} /></mesh>
+          </group>
+        ))}
+      </group>
     </>
   );
 }
 
-export default function Road3D({ light, active }: { light: boolean; active: boolean }) {
+export default function Road3D({ light, active, places }: { light: boolean; active: boolean; places: string[] }) {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => { host.current?.setAttribute("data-ready", "1"); }, []);
   return (
     <div className="lab-road3d" ref={host}>
       <Canvas dpr={[1, 1.25]} frameloop={active ? "always" : "never"} gl={{ antialias: true, powerPreference: "high-performance" }}
-        camera={{ position: [0, 1.25, 4], fov: 58, near: 0.1, far: 140 }}>
-        <Scene light={light} />
+        camera={{ position: [0, 1.25, NEAR], fov: 58, near: 0.1, far: 150 }}>
+        <Scene light={light} places={places} />
       </Canvas>
     </div>
   );

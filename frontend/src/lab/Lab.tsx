@@ -112,18 +112,24 @@ function Odometer({ value, size = "lg" }: { value: string; size?: "lg" | "md" })
 /** A trip-meter odometer driven every frame from `drive.km`: the last wheel turns continuously, like the real thing. */
 function TripMeter({ digits = 5, className = "" }: { digits?: number; className?: string }) {
   const strips = useRef<(HTMLSpanElement | null)[]>([]);
+  // Wheels sit exactly on a digit at rest. Only the tenths wheel rolls, in the last fifth of each tenth, and a
+  // wheel to its left rolls only while every wheel to its right goes 9 -> 0 (a real odometer's carry). Offsets are
+  // whole device pixels of a wheel height chosen so 100/125/150% scaling all land on pixel boundaries.
   useEffect(() => onDrive(() => {
     const tenths = drive.km * 10;
-    for (let i = 0; i < digits; i++) {
-      const place = 10 ** (digits - 1 - i);
-      let value = (tenths / place) % 10;
-      // Higher wheels only turn while the wheel to their right passes 9 -> 0.
-      if (i < digits - 1) {
-        const lower = (tenths % place) / place;
-        value = Math.floor(value) + Math.max(0, (lower - 0.9) * 10);
-      }
+    const dpr = window.devicePixelRatio || 1;
+    let carry = 0;
+    for (let i = digits - 1; i >= 0; i--) {
       const strip = strips.current[i];
-      if (strip) strip.style.transform = `translate3d(0, ${(-value * 10 / 11).toFixed(3)}%, 0)`;
+      const height = strip?.parentElement?.clientHeight ?? 0;
+      const digit = Math.floor(tenths / 10 ** (digits - 1 - i)) % 10;
+      let roll: number;
+      if (i === digits - 1) {
+        const t = Math.min(1, Math.max(0, ((tenths % 1) - 0.8) / 0.2));
+        roll = t * t * (3 - 2 * t);
+      } else roll = carry;
+      carry = digit === 9 ? roll : 0;
+      if (strip && height) strip.style.transform = `translate3d(0, ${-Math.round((digit + roll) * height * dpr) / dpr}px, 0)`;
     }
   }), [digits]);
   return (
@@ -235,6 +241,11 @@ function Hero({ light }: { light: boolean }) {
   const streaks = useRef<HTMLDivElement>(null), needle = useRef<SVGLineElement>(null), kmh = useRef<HTMLSpanElement>(null);
   const flatDashes = useRef<HTMLSpanElement>(null);
   const [use3D] = useState(canRun3D);
+  // Milestones name real cities from the catalog (falling back to Tamil Nadu cities while it loads).
+  const everything = useVehicles("");
+  const placeKey = [...new Set((everything.data?.results ?? []).map(v => v.location?.split(",")[0].trim()).filter(Boolean))].join("|")
+    || "Madurai|Coimbatore|Tiruchirappalli|Salem|Chennai";
+  const places = useMemo(() => placeKey.split("|"), [placeKey]);
   const [onScreen, setOnScreen] = useState(true);
 
   // The hero is a sticky stage inside a taller section (CSS position: sticky, so no pin spacer and no layout
@@ -273,7 +284,7 @@ function Hero({ light }: { light: boolean }) {
       <div className="lab-hero-scene">
         {use3D ? (
           <Suspense fallback={<FlatRoad dashes={flatDashes} />}>
-            <Road3D light={light} active={onScreen} />
+            <Road3D light={light} active={onScreen} places={places} />
           </Suspense>
         ) : <FlatRoad dashes={flatDashes} />}
         <div className="lab-streaks" ref={streaks} aria-hidden="true">
@@ -317,8 +328,30 @@ function Hero({ light }: { light: boolean }) {
   );
 }
 
+/** The 2D road (reduced motion, low-end devices, while the 3D road loads), with a static roadside: the ridge and a
+ *  gopuram on the horizon, palms and milestones along the verge. */
 function FlatRoad({ dashes }: { dashes: React.RefObject<HTMLSpanElement | null> }) {
-  return <div className="lab-flatroad"><div className="lab-road-surface"><span className="lab-road-dashes" ref={dashes} /></div></div>;
+  const palm = (x: number, y: number, s: number, flip = 1) => (
+    <g transform={`translate(${x} ${y}) scale(${s * flip} ${s})`} className="lab-flat-palm">
+      <path d="M0 0 C 4 -40, 10 -80, 6 -120" className="trunk" />
+      <path d="M6 -120 c -20 -10 -40 -4 -54 12 c 18 -14 36 -14 54 -12 z M6 -120 c 20 -12 42 -6 56 10 c -18 -12 -38 -12 -56 -10 z
+        M6 -120 c -10 -18 -30 -26 -44 -24 c 16 2 32 10 44 24 z M6 -120 c 12 -18 32 -24 46 -20 c -16 2 -34 8 -46 20 z
+        M6 -120 c 0 -16 8 -30 18 -36 c -8 10 -14 22 -18 36 z" className="leaf" />
+    </g>
+  );
+  return (
+    <div className="lab-flatroad">
+      <svg className="lab-flat-scenery" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <path className="far" d="M0 240 C 120 190, 200 210, 300 196 S 480 170, 560 200 S 760 180, 860 206 S 960 196, 1000 210 V 260 H 0 Z" />
+        <path className="temple" d="M640 214 V 176 h3 v-6 h3 v-6 h3 v-6 h3 v-6 h3 v-6 c 2 -6 10 -6 12 0 v6 h3 v6 h3 v6 h3 v6 h3 v6 h3 v38 Z" />
+        <rect className="field" x="0" y="258" width="1000" height="442" />
+        {Array.from({ length: 9 }, (_, i) => <rect key={i} className="row" x="0" y={270 + i * i * 6} width="1000" height={2 + i} />)}
+        {palm(90, 520, 1.5)}{palm(200, 380, 0.9, -1)}{palm(830, 560, 1.7, -1)}{palm(930, 420, 1.1)}
+        <g className="stone" transform="translate(760 470)"><rect width="26" height="34" rx="2" /><path d="M0 12 V 10 a13 13 0 0 1 26 0 v2 z" className="cap" /></g>
+      </svg>
+      <div className="lab-road-surface"><span className="lab-road-dashes" ref={dashes} /></div>
+    </div>
+  );
 }
 
 // ----- Chapter 2: key tags drop onto the rack ---------------------------------------------------

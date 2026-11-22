@@ -42,13 +42,15 @@
 
 /* trip meter (frame-driven) */
 .tripmeter { display: inline-flex; gap: 2px; }
-.tripmeter-wheel { width: .72em; height: 1.3em; overflow: hidden; background: #0B0C0E; border-radius: 2px; font: 700 14px/1 "JetBrains Mono", monospace; }
+.tripmeter { --h: 20px; }
+.tripmeter-wheel { width: 14px; height: var(--h); overflow: hidden; background: #0B0C0E; border-radius: 2px; font: 700 14px/1 "JetBrains Mono", monospace; }
 .tripmeter-wheel.tenths { background: var(--lane); }
-.tripmeter-strip { display: flex; flex-direction: column; will-change: transform; color: #EDEAE3; }
+.tripmeter-strip { display: flex; flex-direction: column; color: #EDEAE3; }
 .tripmeter-wheel.tenths .tripmeter-strip { color: #16181B; }
-.tripmeter-strip span { height: 1.3em; display: grid; place-items: center; }
+.tripmeter-strip span { height: var(--h); display: grid; place-items: center; }
 .lab-cluster-trip { margin-top: 6px; }
-.lab-cluster-trip .tripmeter-wheel { font-size: 22px; }
+.lab-cluster-trip { --h: 28px; }
+.lab-cluster-trip .tripmeter-wheel { font-size: 22px; width: 20px; }
 
 /* hero v2: a full-screen pinned scene */
 .lab .lab-hero { display: block; height: 190vh; min-height: 1200px; }
@@ -58,7 +60,16 @@
 .lab-hero-scene::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(90deg, var(--tarmac) 0%, color-mix(in srgb, var(--tarmac) 70%, transparent) 34%, transparent 62%); }
 .lab-flatroad { position: absolute; inset: 0 0 0 30%; overflow: hidden; }
-.lab-flatroad .lab-road-surface { inset: 0; }
+.lab-flatroad .lab-road-surface { inset: 37% 0 0 0; clip-path: polygon(48.5% 0, 51.5% 0, 100% 100%, 0 100%); }
+.lab-flatroad .lab-road-surface::before, .lab-flatroad .lab-road-surface::after { display: none; }
+.lab-flat-scenery { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lab-flat-scenery .far { fill: #1E1F1C; } .lab-flat-scenery .temple { fill: #26241F; }
+.lab-flat-scenery .field { fill: #111915; } .lab-flat-scenery .row { fill: #16231A; }
+.lab-flat-palm .trunk { fill: none; stroke: #2E2820; stroke-width: 7; stroke-linecap: round; } .lab-flat-palm .leaf { fill: #183022; }
+.lab-flat-scenery .stone rect { fill: #D8D4CB; } .lab-flat-scenery .stone .cap { fill: #FFC531; }
+.lab[data-theme="light"] .lab-flat-scenery .far { fill: #C7C6AA; } .lab[data-theme="light"] .lab-flat-scenery .temple { fill: #BFAE8D; }
+.lab[data-theme="light"] .lab-flat-scenery .field { fill: #9DBB6A; } .lab[data-theme="light"] .lab-flat-scenery .row { fill: #7FA552; }
+.lab[data-theme="light"] .lab-flat-palm .trunk { stroke: #8A6B4A; } .lab[data-theme="light"] .lab-flat-palm .leaf { fill: #4F8A3B; }
 .lab-flatroad .lab-road-dashes { transform-origin: 50% 100%; }
 .lab-streaks { position: absolute; inset: 0; opacity: 0; transform-origin: 50% 40%; pointer-events: none; z-index: 1; }
 .lab-streaks span { position: absolute; top: -20%; width: 2px; height: 40%; background: linear-gradient(transparent, #FFE9A8cc, transparent);
