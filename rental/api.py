@@ -42,6 +42,12 @@ class BookingCreationThrottle(UserRateThrottle):
     rate = "10/min"
 
 
+def vehicle_cards():
+    """Prefetch each booking's vehicle with its review summary and photos (no per-row queries)."""
+    from django.db.models import Prefetch
+    return Prefetch("vehicle", queryset=with_review_summary(Vehicle.objects.all()).prefetch_related("photos"))
+
+
 def conflict(error):
     body = {"detail": error.messages[0]}
     if getattr(error, "earliest_pickup", None):
@@ -93,7 +99,8 @@ class VehicleList(generics.ListAPIView):
 def bookings(request):
     profile = rental_profile(request.user)
     if request.method == "GET":
-        rows = Booking.objects.filter(user=profile).select_related("vehicle", "user__user", "review", "payment").order_by(
+        rows = Booking.objects.filter(user=profile).select_related("user__user", "review", "payment").prefetch_related(
+            vehicle_cards()).order_by(
             "-start_date", "-pk")
         return Response(BookingSerializer(rows, many=True, context={"request": request}).data)
     throttle = BookingCreationThrottle()
@@ -156,7 +163,8 @@ class OwnerBookings(generics.ListAPIView):
     serializer_class = BookingSerializer
 
     def get_queryset(self):
-        return owner_bookings(self.request.user).select_related("vehicle", "user__user", "review", "payment").order_by("start_date", "pk")
+        return owner_bookings(self.request.user).select_related("user__user", "review", "payment").prefetch_related(
+            vehicle_cards()).order_by("start_date", "pk")
 
 
 def visible_booking(user, pk):
@@ -224,7 +232,8 @@ def booking_action(request, pk, action):
 def fleet(request):
     owner = rental_profile(request.user)
     if request.method == "GET":
-        vehicles = Vehicle.objects.filter(owner=owner).order_by("archived_at", "name", "pk")
+        vehicles = with_review_summary(Vehicle.objects.filter(owner=owner)).prefetch_related("photos").order_by(
+            "archived_at", "name", "pk")
         return Response(FleetVehicleSerializer(vehicles, many=True, context={"request": request}).data)
     form = VehicleForm(request.data, request.FILES)
     if not form.is_valid():
@@ -363,7 +372,7 @@ def quote(request, pk):
 @authentication_classes(SESSION_AUTH)
 @permission_classes(SIGNED_IN)
 def favorites(request):
-    rows = listed_vehicles().filter(favorite__user=request.user).prefetch_related("photos")
+    rows = with_review_summary(listed_vehicles().filter(favorite__user=request.user)).prefetch_related("photos")
     return Response(VehicleSerializer(rows, many=True, context={"request": request}).data)
 
 
