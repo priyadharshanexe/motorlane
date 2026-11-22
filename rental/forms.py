@@ -31,8 +31,13 @@ class BookingDatesForm(forms.Form):
         end = data.get("end_date")
         if start and start < timezone.localdate():
             self.add_error("start_date", "Choose today or a later date.")
+        from django.conf import settings
         if start and end and end < start:
             self.add_error("end_date", "End date cannot be before start date.")
+        elif start and (start - timezone.localdate()).days > settings.RENTAL_MAX_ADVANCE_DAYS:
+            self.add_error("start_date", f"Bookings open up to {settings.RENTAL_MAX_ADVANCE_DAYS} days ahead.")
+        elif start and end and (end - start).days + 1 > settings.RENTAL_MAX_DAYS:
+            self.add_error("end_date", f"A rental can last up to {settings.RENTAL_MAX_DAYS} days.")
         elif start and end:
             data["pickup_time"] = data.get("pickup_time") or DEFAULT_PICKUP_TIME
             data["return_time"] = data.get("return_time") or DEFAULT_RETURN_TIME

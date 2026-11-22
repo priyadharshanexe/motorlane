@@ -224,6 +224,8 @@ RENTAL_LONG_RENTAL_DISCOUNTS = (  # (minimum billable days, percent off), larges
     (7, env_int("RENTAL_WEEKLY_DISCOUNT_PERCENT", 10)),
 )
 RENTAL_FREE_CANCELLATION_HOURS = env_int("RENTAL_FREE_CANCELLATION_HOURS", 48)
+RENTAL_MAX_DAYS = env_int("RENTAL_MAX_DAYS", 90)
+RENTAL_MAX_ADVANCE_DAYS = env_int("RENTAL_MAX_ADVANCE_DAYS", 365)
 RENTAL_CANCELLATION_FEE_PERCENT = env_int("RENTAL_CANCELLATION_FEE_PERCENT", 20)
 
 # Payments: Razorpay TEST mode when test keys are configured, otherwise a built-in fake

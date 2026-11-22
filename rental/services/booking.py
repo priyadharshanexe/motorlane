@@ -30,6 +30,8 @@ def reserve_vehicle(user_id, vehicle_id, start_date, end_date, pickup_time=None,
         raise forms.ValidationError("Choose a valid pickup and return date.")
     if not vehicle.is_available or vehicle.archived_at:
         raise forms.ValidationError("This vehicle is no longer available.")
+    if vehicle.owner_id == user_id:
+        raise forms.ValidationError("You cannot book your own vehicle.")
     if active.filter(user_id=user_id).count() >= 3:
         raise forms.ValidationError("You can only have 3 active bookings at a time.")
     pickup_at, return_at = rental_window(start_date, end_date, pickup_time, return_time)
