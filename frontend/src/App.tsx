@@ -1,5 +1,6 @@
 import { Favorites } from "./Favorites";
 import { Checkout } from "./Checkout";
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes, Link } from "react-router-dom";
 import AccountScreen from "./AccountScreen";
 import { SignIn } from "./Auth";
@@ -9,9 +10,15 @@ import { Bookings } from "./Bookings";
 import { Dashboard } from "./Dashboard";
 import { Fleet, MaintenanceIndex, MaintenancePage, Values } from "./Owner";
 
+// The design-concept lab is its own chunk and is not linked from the app.
+const Lab = lazy(() => import("./lab/Lab"));
+
 export default function App() {
   return (
     <BrowserRouter basename="/app">
+      <Routes>
+      <Route path="lab" element={<Suspense fallback={null}><Lab /></Suspense>} />
+      <Route path="*" element={
       <Layout>
         <Routes>
           <Route
@@ -138,6 +145,8 @@ export default function App() {
           />
         </Routes>
       </Layout>
+      } />
+      </Routes>
     </BrowserRouter>
   );
 }
