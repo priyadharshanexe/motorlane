@@ -2674,3 +2674,5 @@ main {
 
 .time-field { display: grid; gap: 4px; margin: 8px 0; font-size: 13px; color: #5b6472; }
 .time-field input { max-width: 140px; }
+
+.price-breakdown dt small { display: block; }

@@ -1,6 +1,6 @@
 # Motorlane - Vehicle Rental Marketplace
 
-[GitHub repository](https://github.com/priyadharshanexe/motorlane)
+[GitHub repository](https://github.com/priyadharshanexe/motorlane) · Live demo: _coming soon_ (link added once deployed) · [Demo script](docs/demo-script.md)
 
 Browse cars and bikes, request a rental for selected dates, and follow the
 booking through pickup and return. Vehicle owners manage their fleet,
@@ -9,6 +9,8 @@ availability, incoming requests, maintenance, and completed booking value.
 ![Motorlane marketplace homepage](docs/screenshots/marketplace.jpg)
 
 Screenshots refreshed on 20 November 2026 from the Docker app with real vehicle photographs and the studio hero. Signed-in pages use demo accounts.
+
+![A rental from booking to review: checkout with times and the price breakdown, demo payment, return with the deposit refund, review, cancellation refund and the owner's value report](docs/screenshots/journey.gif)
 
 ## Architecture
 
@@ -134,6 +136,14 @@ set `DJANGO_FROM_EMAIL`. Local debug mode prints account email to the console.
 Google sign-in uses `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` when
 configured. Register the callback at
 `/accounts/google/login/callback/` for the exact host, scheme, and port.
+
+### Production and public demo
+
+`deploy/` holds a production stack: MySQL, Django under Gunicorn, the scheduler,
+and Caddy with automatic HTTPS, plus health checks and an environment template.
+A public demo runs with `DJANGO_DEMO_MODE=1`: demo payments are labelled, and with
+`DEMO_DAILY_RESET=1` the data is wiped and re-seeded every day. See the
+[deployment guide](docs/deploy.md).
 
 ## API overview
 
