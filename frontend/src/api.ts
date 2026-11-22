@@ -43,6 +43,9 @@ export interface Booking extends DateRange {
   reviewed: boolean
   overdue: boolean
   status_changed_at: string | null
+  pickup_time: string
+  return_time: string
+  price_breakdown?: Partial<import('./Pricing').Quote>
   payment_required?: boolean
   payment?: { status: string; amount: string; refunded: string; cancellation_fee: string; provider: string } | null
 }

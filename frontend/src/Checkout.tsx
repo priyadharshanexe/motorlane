@@ -10,7 +10,8 @@ import {
 import { api, dateLabel } from "./api";
 import type { VehicleDetail } from "./api";
 import { useSession, useWrite } from "./requests";
-import { PriceBreakdown } from "./Pricing";
+import { QuoteLines } from "./Pricing";
+import type { Quote } from "./Pricing";
 import { Busy, Notice, Photo } from "./shared";
 import { Breadcrumb } from "./Breadcrumb";
 
@@ -20,6 +21,8 @@ export function Checkout() {
     navigate = useNavigate();
   const start = params.get("start_date") || "",
     end = params.get("end_date") || "";
+  const [pickupTime, setPickupTime] = useState(params.get("pickup_time") || "09:00"),
+    [returnTime, setReturnTime] = useState(params.get("return_time") || "18:00");
   const session = useSession(),
     write = useWrite<{ id: number }>();
   const [accepted, setAccepted] = useState(false);
@@ -30,10 +33,10 @@ export function Checkout() {
   const validDates = isRentalDate(start) && isRentalDate(end) && start >= rentalToday() && end >= start;
   const quote = useQuery({
     enabled: Boolean(id) && validDates,
-    queryKey: ["checkout-quote", id, start, end],
+    queryKey: ["checkout-quote", id, start, end, pickupTime, returnTime],
     queryFn: () =>
-      api<{ days: number; total_price: string }>(
-        `vehicles/${id}/quote/?${new URLSearchParams({ start_date: start, end_date: end })}`,
+      api<Quote>(
+        `vehicles/${id}/quote/?${new URLSearchParams({ start_date: start, end_date: end, pickup_time: pickupTime, return_time: returnTime })}`,
       ),
     retry: false,
   });
@@ -108,14 +111,28 @@ export function Checkout() {
               <div>
                 <span className="eyebrow">Pickup</span>
                 <h3>{start ? dateLabel(start) : "Select a date"}</h3>
+                <label className="time-field">
+                  Pickup time
+                  <input type="time" name="pickup_time" form="rental-checkout" value={pickupTime}
+                    step={900} required onChange={(event) => setPickupTime(event.target.value)} />
+                </label>
                 <p>⌖ {v.location || "Arrange with owner"}</p>
               </div>
               <div>
                 <span className="eyebrow">Return</span>
                 <h3>{end ? dateLabel(end) : "Select a date"}</h3>
+                <label className="time-field">
+                  Return time
+                  <input type="time" name="return_time" form="rental-checkout" value={returnTime}
+                    step={900} required onChange={(event) => setReturnTime(event.target.value)} />
+                </label>
                 <p>⌖ {v.location || "Arrange with owner"}</p>
               </div>
             </div>
+            <p className="fine-print">
+              Every started 24 hours counts as a rental day. Owners keep a short cleaning window between
+              rentals, so a slot right after another booking may be unavailable.
+            </p>
             <Link className="button secondary" to={`/vehicles/${id}?${params}`}>
               Edit rental dates
             </Link>
@@ -167,19 +184,19 @@ export function Checkout() {
                 "Arrange the exact pickup point and handoff with the owner after confirmation."}
             </p>
             <ul className="conditions">
-              <li>Pickup and return dates both count as rental days.</li>
+              <li>Every started 24 hours between pickup and return counts as a rental day.</li>
               <li>
                 The owner has up to 24 hours to respond. A request is not a
                 confirmed rental.
               </li>
               <li>
                 Pending requests can be cancelled. Confirmed bookings can be
-                cancelled before the pickup date.
+                cancelled before pickup: free until 48 hours before, after that
+                20% of the rental is kept. The deposit is always refunded.
               </li>
               <li>
-                Insurance, deposits, and any additional arrangements must be
-                confirmed with the owner. They are not included as paid extras
-                here.
+                Insurance and any additional arrangements must be confirmed with
+                the owner.
               </li>
             </ul>
           </section>
@@ -189,18 +206,12 @@ export function Checkout() {
           <h2>Booking summary</h2>
           {quote.isPending && <Busy />}
           <Notice error={quote.error} />
-          {quote.data && (
-            <PriceBreakdown
-              rate={v.price_per_day}
-              days={quote.data.days}
-              total={quote.data.total_price}
-            />
-          )}
+          {quote.data && <QuoteLines quote={quote.data} />}
           <div className="payment-note">
             <strong>No payment collected now</strong>
             <p>
-              This sends a rental request. Payment collection is not available
-              on Motorlane yet.
+              This sends a rental request. Once the owner confirms, you pay the
+              rental and the refundable deposit from your booking.
             </p>
           </div>
           <form

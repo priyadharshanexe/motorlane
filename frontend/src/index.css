@@ -2671,3 +2671,6 @@ main {
 .payment-action { display: inline-flex; flex-direction: column; gap: 4px; }
 .payment-mode { color: #5b6472; font-size: 12px; }
 .payment-error { color: #b42318; font-size: 12px; }
+
+.time-field { display: grid; gap: 4px; margin: 8px 0; font-size: 13px; color: #5b6472; }
+.time-field input { max-width: 140px; }

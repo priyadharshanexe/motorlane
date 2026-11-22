@@ -1,6 +1,7 @@
 import { rentalToday } from "./rentalDates";
 import { Breadcrumb } from "./Breadcrumb";
-import { Price, PriceBreakdown } from "./Pricing";
+import { Price, PriceBreakdown, QuoteLines } from "./Pricing";
+import type { Quote } from "./Pricing";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -138,18 +139,18 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
                 </div>
                 <dl className="booking-dates">
                   <div>
-                    <dt>Pickup date</dt>
+                    <dt>Pickup</dt>
                     <dd>
-                      <time dateTime={row.start_date}>
-                        {dateLabel(row.start_date)}
+                      <time dateTime={`${row.start_date}T${row.pickup_time}`}>
+                        {dateLabel(row.start_date)}, {clock(row.pickup_time)}
                       </time>
                     </dd>
                   </div>
                   <div>
-                    <dt>Return date</dt>
+                    <dt>Return</dt>
                     <dd>
-                      <time dateTime={row.end_date}>
-                        {dateLabel(row.end_date)}
+                      <time dateTime={`${row.end_date}T${row.return_time}`}>
+                        {dateLabel(row.end_date)}, {clock(row.return_time)}
                       </time>
                     </dd>
                   </div>
@@ -174,7 +175,8 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
                       {row.vehicle.location ?? "Location on request"}
                     </p>
                     <p>
-                      {dateLabel(row.start_date)} to {dateLabel(row.end_date)}
+                      {dateLabel(row.start_date)}, {clock(row.pickup_time)} to{" "}
+                      {dateLabel(row.end_date)}, {clock(row.return_time)}
                     </p>
                     {owner && (
                       <>
@@ -276,7 +278,8 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
                 </>
               )}
             </div>
-            {id && (
+            {id && row.price_breakdown?.lines && <QuoteLines quote={row.price_breakdown as Quote} />}
+            {id && !row.price_breakdown?.lines && (
               <PriceBreakdown
                 rate={row.quoted_daily_rate}
                 days={
@@ -314,6 +317,11 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
       </div>
     </>
   );
+}
+
+/** "09:00:00" -> "09:00". */
+function clock(value: string) {
+  return value.slice(0, 5);
 }
 
 function timestamp(value: string) {
