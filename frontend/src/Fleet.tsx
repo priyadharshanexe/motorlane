@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "./api";
-import type { FleetVehicle } from "./api";
+import type { FleetVehicle, VehiclePhoto } from "./api";
 import { Busy, Notice, Photo, Status } from "./shared";
 import { formData, useWrite } from "./requests";
 
@@ -123,6 +123,27 @@ export function Fleet() {
               />
             </label>
             <label>
+              Weekend rate (INR) <span className="optional">Optional, Sat and Sun</span>
+              <input
+                type="number"
+                name="weekend_price_per_day"
+                min=".01"
+                step=".01"
+                placeholder="Same as the daily rate"
+                defaultValue={vehicle?.weekend_price_per_day ?? ""}
+              />
+            </label>
+            <label>
+              Refundable deposit (INR)
+              <input
+                type="number"
+                name="deposit"
+                min="0"
+                step=".01"
+                defaultValue={vehicle?.deposit ?? "0"}
+              />
+            </label>
+            <label>
               Transmission
               <select
                 name="transmission"
@@ -170,7 +191,7 @@ export function Fleet() {
               />
             </label>
             <label>
-              Vehicle photo
+              {vehicle ? "Replace the cover photo" : "Cover photo"}
               <input
                 type="file"
                 name="vehicle_image"
@@ -193,6 +214,7 @@ export function Fleet() {
                 alt="Listing photo preview"
               />
             )}
+            {vehicle && <PhotoManager vehicle={vehicle} />}
             <Notice error={write.error} />
             <div className="actions">
               <button disabled={write.isPending}>Save vehicle</button>
@@ -354,3 +376,49 @@ export function Fleet() {
   );
 }
 
+
+/** Extra photos for an existing listing: add, choose the cover, remove (the server keeps at least one). */
+function PhotoManager({ vehicle }: { vehicle: FleetVehicle }) {
+  const write = useWrite<VehiclePhoto>();
+  const photos = useQuery({
+    queryKey: ["fleet-photos", vehicle.id],
+    queryFn: () => api<VehiclePhoto[]>(`owner/fleet/${vehicle.id}/photos/`),
+  });
+  const base = `owner/fleet/${vehicle.id}/photos/`;
+  return (
+    <fieldset className="full-field photo-manager">
+      <legend>Photos <span className="optional">Up to 8; the cover appears on cards</span></legend>
+      <div className="photo-grid">
+        {photos.data?.map(photo => (
+          <figure key={photo.id} className={photo.is_cover ? "is-cover" : undefined}>
+            <img src={photo.small} alt="" width={160} height={100} loading="lazy" />
+            <figcaption>
+              {photo.is_cover ? <strong>Cover</strong> : (
+                <button type="button" className="secondary" disabled={write.isPending}
+                  onClick={() => write.mutate({ path: `${base}${photo.id}/`, method: "PATCH", body: { cover: true } })}>
+                  Make cover
+                </button>
+              )}
+              <button type="button" className="secondary" disabled={write.isPending || (photos.data?.length ?? 0) < 2}
+                onClick={() => write.mutate({ path: `${base}${photo.id}/`, method: "DELETE" })}>
+                Remove
+              </button>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+      <label>
+        Add a photo
+        <input type="file" accept="image/jpeg,image/png,image/webp" disabled={write.isPending}
+          onChange={event => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            const body = new FormData();
+            body.append("image", file);
+            write.mutate({ path: base, body }, { onSettled: () => { event.target.value = ""; } });
+          }} />
+      </label>
+      <Notice error={write.error} />
+    </fieldset>
+  );
+}

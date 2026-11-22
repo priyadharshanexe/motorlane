@@ -19,6 +19,9 @@ export interface Vehicle {
   price_per_day: string
   vehicle_image: string | null
   cover?: { small: string; large: string; width: number | null; height: number | null; color: string | null } | null
+  weekend_price_per_day?: string | null
+  deposit?: string
+  photos?: VehiclePhoto[]
 }
 export interface DateRange { start_date: string; end_date: string }
 export interface Review { id: number; rating: number; comment: string }
@@ -50,6 +53,8 @@ export interface Booking extends DateRange {
   payment_required?: boolean
   payment?: { status: string; amount: string; refunded: string; cancellation_fee: string; provider: string } | null
 }
+export interface VehiclePhoto { id: number; url: string; small: string; large: string; order: number; is_cover: boolean }
+export interface TimelineEvent { id: number; from_status: string; to_status: string; actor: string; at: string; note: string }
 export interface Maintenance extends DateRange { id: number; reason: string }
 export interface BookingValue { vehicle_id: number; vehicle__name: string; bookings: number; value: string }
 
