@@ -1,0 +1,1 @@
+{% extends "rental/emails/base.html" %}{% block content %}<p>Your request expired before the owner answered it. Nothing was charged. The vehicle may still be free, or you can choose another one.{% if reason %} ({{ reason }}){% endif %}</p>{% endblock %}{% block link %}/app/vehicles{% endblock %}{% block action %}Find a vehicle{% endblock %}

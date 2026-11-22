@@ -22,6 +22,7 @@ from django.utils import timezone
 
 from ..models import Booking
 from .events import record_event
+from .notifications import notify
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,15 @@ def expire_bookings(now=None, batch_size=200):
                 booking.status_changed_at = now
                 booking.status_changed_by = None
                 booking.save(update_fields=["status", "status_changed_at", "status_changed_by"])
-                record_event(booking, previous, Booking.Status.EXPIRED, note=reason, at=now)
+                note = reason
+                if previous == Booking.Status.CONFIRMED:
+                    # A no-show keeps the rental charge, but the deposit was never at risk.
+                    from ..payments.service import refund_deposit
+                    if deposit := refund_deposit(booking):
+                        note = f"{reason} Deposit of ₹{deposit} refunded."
+                record_event(booking, previous, Booking.Status.EXPIRED, note=note, at=now)
+                notify("request_expired" if previous == Booking.Status.PENDING else "booking_expired", booking,
+                       reason=note)
                 expired.append(booking.pk)
         if len(batch) < batch_size:
             break

@@ -27,6 +27,8 @@ MESSAGES = {
     "pickup_reminder": ("renter", "Reminder: pick up your {vehicle} tomorrow"),
     "return_received": ("renter", "We received your {vehicle} back"),
     "review_request": ("renter", "How was your {vehicle} rental?"),
+    "request_expired": ("renter", "Your {vehicle} request expired"),
+    "booking_expired": ("renter", "Your {vehicle} booking expired"),
 }
 RETRY_DELAYS = [timedelta(minutes=m) for m in (1, 5, 15, 60, 240)]
 MAX_ATTEMPTS = len(RETRY_DELAYS) + 1

@@ -1,0 +1,1 @@
+{% extends "rental/emails/base.html" %}{% block content %}<p>Your rental window ended without a recorded pickup, so the booking expired.{% if reason %} {{ reason }}{% endif %} Contact the owner if you think this is a mistake.</p>{% endblock %}{% block link %}/app/vehicles{% endblock %}{% block action %}Find a vehicle{% endblock %}
