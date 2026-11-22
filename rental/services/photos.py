@@ -115,10 +115,10 @@ def delete_photo(vehicle, photo_id):
     if photo.is_cover:
         nxt = vehicle.photos.order_by("order", "pk").first()
         VehiclePhoto.objects.filter(pk=nxt.pk).update(is_cover=True)
-    for field in ("image", *THUMBNAIL_WIDTHS):
-        file = getattr(photo, field)
-        if file:
-            file.storage.delete(file.name)
+    names = [getattr(photo, field).name for field in ("image", *THUMBNAIL_WIDTHS) if getattr(photo, field)]
+    storage = photo.image.storage
+    # Remove the files only once the deletion is committed; a rollback must not leave a row without its file.
+    transaction.on_commit(lambda: [storage.delete(name) for name in names])
 
 
 def replace_cover(vehicle, upload):
