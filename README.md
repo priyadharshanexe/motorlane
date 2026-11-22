@@ -19,7 +19,7 @@ flowchart LR
     Django -->|Session and CSRF validation| Allauth
     Django -->|Booking and fleet transactions| DB[(MySQL)]
     Allauth --> DB
-    Scheduler["Scheduler container"] -->|expire_bookings · send_pickup_reminders| DB
+    Scheduler["Scheduler container"] -->|expiry · reminders · email outbox · refund retries| DB
     Django -->|Emails on commit| Mail["Email backend"]
     Django <-->|Orders, refunds, signed webhooks| Pay["Fake provider / Razorpay test mode"]
 ```
@@ -54,7 +54,10 @@ and `fake` is a demo provider that `manage.py check` refuses unless
 `DJANGO_DEBUG=1` or `DJANGO_DEMO_MODE=1`, in which case the UI labels it
 "Demo payment, no real money". Pickup needs a completed payment. Cancelling at least
 48 hours before pickup refunds everything; later, 20% of the rental is kept and
-the deposit is returned. The deposit is refunded at return. Webhooks are
+the deposit is returned. The deposit is refunded at return. Each refund is a
+durable intent written with the booking change and sent to the provider after
+commit with a stable idempotency key; failures retry with backoff and a
+reconciliation job checks unfinished refunds against the provider. Webhooks are
 verified by HMAC signature and each provider event id is applied once.
 
 ### Data model
@@ -67,11 +70,14 @@ verified by HMAC signature and each provider event id is applied once.
 | `BookingEvent` | Append-only timeline: every creation, transition and expiry with actor and note |
 | `MaintenanceBlock` | Whole-day unavailability set by the owner |
 | `Feedback` | One verified review per returned booking, rating 1 to 5 (database constraints) |
-| `Payment`, `Refund`, `WebhookEvent` | Charge, refunds and processed provider event ids |
+| `Payment`, `RefundIntent`, `WebhookEvent` | Charge, refunds owed and their delivery state, processed provider event ids |
+| `NotificationOutbox` | Rendered emails with delivery status, attempts and the next retry time |
 | `Favorite` | Saved vehicles |
 
-Emails (text and HTML, sent after commit): new request to the owner; approved,
-rejected and cancelled to the renter; a pickup reminder the day before; return
+Emails (text and HTML) go through the outbox: queued in the same transaction
+as the booking change, delivered after commit, retried with backoff on failure.
+New request to the owner; approved, rejected and cancelled to the renter; a
+pickup reminder the day before (marked sent only once delivered); return
 received and a review request.
 
 ## Run locally
@@ -108,7 +114,9 @@ docker compose --profile app up -d web scheduler
 
 The `scheduler` service runs `python manage.py run_scheduled_jobs` every
 `SCHEDULER_INTERVAL_SECONDS` (default 300). The jobs are idempotent, so a restart
-or a second instance is harmless. `expire_bookings` marks pending requests whose
+or a second instance is harmless. The jobs are `expire_bookings`,
+`send_pickup_reminders`, `send_notifications` (email outbox), `process_refunds`
+and `reconcile_refunds`. `expire_bookings` marks pending requests whose
 24-hour response window or pickup date has passed as Expired, and confirmed
 bookings that were never picked up by the end of their rental window as Expired
 (owners may record a late pickup until then). Each change is written to the
@@ -174,8 +182,8 @@ openly licensed Wikimedia Commons images credited in [CREDITS.md](CREDITS.md).
 
 Run `python manage.py test`, `npm --prefix frontend test`,
 `npm --prefix frontend run lint`, and `npm --prefix frontend run build`.
-The Django suite (100+ tests) covers every status transition and permission,
-pricing, expiry, notifications, payments and duplicate webhooks, concurrency
+The Django suite (120+ tests) covers every status transition and permission,
+pricing, expiry, the email outbox, payments, refund intents and duplicate webhooks, concurrency
 on MySQL, and a full rental through the API. CI runs settings checks,
 migration checks (forward and reverse), OpenAPI validation and the suite on
 MySQL, builds the Docker image and probes the running stack, and checks the
