@@ -1,19 +1,33 @@
-// /app/lab: a live concept prototype of the "Odometer" design direction (docs/design-direction.md).
-// Not linked from the app. It reads real catalog data but changes nothing. Plain CSS + pointer
-// events only, so the prototype adds no dependencies; the real build will use Motion and GSAP.
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+// /app/lab: a live prototype of the "Odometer" design direction (docs/design-direction.md).
+// Not linked from the app; reads real catalog data and changes nothing.
+//
+// Motion architecture (one system, no competing loops):
+//   Lenis scrolls -> drives GSAP ScrollTrigger and gsap.ticker -> `drive` (throttle, km/h, km) ->
+//   the 3D road, speedometer, HUD, headline stretch, streaks and backdrop all read the same numbers.
+// Only transform and opacity change per frame. prefers-reduced-motion turns all of it off and shows
+// final states.
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import type { Vehicle } from "../api";
+import { drive, gsap, IDLE_KMH, MAX_KMH, onDrive, ScrollTrigger, startDrive, stopDrive } from "./drive";
 import "./lab.css";
+import "./lab-v2.css";
+
+const Road3D = lazy(() => import("./Road3D"));
 
 type Theme = "dark" | "light";
+const FONTS = "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&family=Public+Sans:wght@400;600&display=swap";
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** The 3D road only where it will run smoothly; everyone else gets the 2D road. */
+const canRun3D = () => {
+  const nav = navigator as Navigator & { connection?: { saveData?: boolean } };
+  return !reducedMotion() && (navigator.hardwareConcurrency ?? 8) > 4 && !nav.connection?.saveData
+    && !!document.createElement("canvas").getContext("webgl2");
+};
 
-const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-/** True while the page is being scrolled (and for a short moment after), so hover effects don't fire
- *  when content slides under a still cursor. One listener for the whole lab. */
+/** True while scrolling (and briefly after), so hover effects don't fire when content slides under a still cursor. */
 const scrolling = { active: false, timer: 0 };
 if (typeof window !== "undefined") {
   window.addEventListener("scroll", () => {
@@ -23,55 +37,45 @@ if (typeof window !== "undefined") {
   }, { passive: true });
 }
 
-/** Run `onEnter` once, the first time the element is at least `threshold` visible. */
-function useRevealOnce<T extends Element>(onEnter: () => void, threshold = 0.35) {
-  const ref = useRef<T>(null);
-  const callback = useRef(onEnter);
-  useEffect(() => { callback.current = onEnter; });
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    const observer = new IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting)) {
-        observer.disconnect();
-        callback.current();
-      }
-    }, { threshold });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [threshold]);
-  return ref;
-}
-
-const FONTS = "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&family=Public+Sans:wght@400;600&display=swap";
-
 export default function Lab() {
   const [theme, setTheme] = useState<Theme>(() => (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+  const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = FONTS;
+    const link = Object.assign(document.createElement("link"), { rel: "stylesheet", href: FONTS });
     document.head.appendChild(link);
     document.title = "Motorlane · Odometer concept";
-    return () => link.remove();
+    startDrive();
+    return () => { stopDrive(); link.remove(); };
+  }, []);
+  // Each chapter announces itself to the HUD's GPS readout as it scrolls into the middle of the screen.
+  useLayoutEffect(() => {
+    const ctx = gsap.context(() => {
+      gsap.utils.toArray<HTMLElement>("[data-chapter]").forEach(section => {
+        ScrollTrigger.create({ trigger: section, start: "top 55%", end: "bottom 55%",
+          onToggle: self => { if (self.isActive) drive.chapter = section.dataset.chapter ?? ""; } });
+      });
+    }, root);
+    return () => ctx.revert();
   }, []);
   return (
-    <div className="lab" data-theme={theme}>
+    <div className="lab" data-theme={theme} ref={root}>
+      <Backdrop />
       <header className="lab-bar">
         <Mark />
-        <span className="lab-note">Design concept · not the live site</span>
+        <span className="lab-note">Design concept · not the live site · scroll to drive</span>
         <button className="lab-toggle" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
           aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
-          {theme === "dark" ? "Light" : "Dark"} mode
+          {theme === "dark" ? "Daytime" : "Night"}
         </button>
       </header>
-      <Hero />
-      <Catalog />
-      <Trip />
-      <footer className="lab-foot">
-        Odometer concept for Motorlane. Static parts are placeholders; motion here is a quick taste, built
-        without the animation libraries the real build will use.
-      </footer>
+      <main className="lab-main">
+        <Hero light={theme === "light"} />
+        <Catalog />
+        <HowItWorks />
+        <Trip />
+        <Finish />
+      </main>
+      <Hud />
     </div>
   );
 }
@@ -88,7 +92,9 @@ function Mark() {
   );
 }
 
-/** Odometer: each digit is a column of 0-9 that rolls to the target digit. */
+// ----- Shared bits ----------------------------------------------------------------------------
+
+/** Odometer: each digit is a column of 0-9 that rolls to the target digit (driven by React value changes). */
 function Odometer({ value, size = "lg" }: { value: string; size?: "lg" | "md" }) {
   return (
     <span className={`odo odo-${size}`} aria-label={value} role="img">
@@ -103,6 +109,36 @@ function Odometer({ value, size = "lg" }: { value: string; size?: "lg" | "md" })
   );
 }
 
+/** A trip-meter odometer driven every frame from `drive.km`: the last wheel turns continuously, like the real thing. */
+function TripMeter({ digits = 5, className = "" }: { digits?: number; className?: string }) {
+  const strips = useRef<(HTMLSpanElement | null)[]>([]);
+  useEffect(() => onDrive(() => {
+    const tenths = drive.km * 10;
+    for (let i = 0; i < digits; i++) {
+      const place = 10 ** (digits - 1 - i);
+      let value = (tenths / place) % 10;
+      // Higher wheels only turn while the wheel to their right passes 9 -> 0.
+      if (i < digits - 1) {
+        const lower = (tenths % place) / place;
+        value = Math.floor(value) + Math.max(0, (lower - 0.9) * 10);
+      }
+      const strip = strips.current[i];
+      if (strip) strip.style.transform = `translate3d(0, ${(-value * 10 / 11).toFixed(3)}%, 0)`;
+    }
+  }), [digits]);
+  return (
+    <span className={`tripmeter ${className}`} aria-hidden="true">
+      {Array.from({ length: digits }, (_, i) => (
+        <span className={`tripmeter-wheel${i === digits - 1 ? " tenths" : ""}`} key={i}>
+          <span className="tripmeter-strip" ref={el => { strips.current[i] = el; }}>
+            {"01234567890".split("").map((d, k) => <span key={k}>{d}</span>)}
+          </span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function useVehicles(type: string) {
   return useQuery({
     queryKey: ["lab-vehicles", type],
@@ -110,57 +146,160 @@ function useVehicles(type: string) {
   });
 }
 
-function Hero() {
+/** Run once when the element first comes into view. */
+function useOnce<T extends Element>(onEnter: () => void, start = "top 75%") {
+  const ref = useRef<T>(null);
+  const callback = useRef(onEnter);
+  useEffect(() => { callback.current = onEnter; });
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    const trigger = ScrollTrigger.create({ trigger: ref.current, start, once: true, onEnter: () => callback.current() });
+    return () => trigger.kill();
+  }, [start]);
+  return ref;
+}
+
+// ----- Backdrop and HUD -----------------------------------------------------------------------
+
+/** The page's "world": tarmac grain, margin lane markings and kerb hatching at two depths, road signs and
+ *  kilometre posts in the far layer, and a headlight sweep when you accelerate hard. Fixed behind content. */
+function Backdrop() {
+  const near = useRef<HTMLDivElement>(null), far = useRef<HTMLDivElement>(null), sweep = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (reducedMotion()) return;
+    let sweeping = false;
+    return onDrive(() => {
+      const travelled = drive.km * 9000;  // the margins scroll with distance driven, not just page position
+      if (near.current) near.current.style.transform = `translate3d(0, ${(-(travelled % 160)).toFixed(1)}px, 0)`;
+      if (far.current) far.current.style.transform = `translate3d(0, ${(-((travelled * 0.35) % 1400)).toFixed(1)}px, 0)`;
+      if (!sweeping && drive.throttle > 0.55 && sweep.current) {
+        sweeping = true;
+        gsap.fromTo(sweep.current, { xPercent: -60, opacity: 0 }, {
+          xPercent: 160, opacity: 1, duration: 1.1, ease: "power2.inOut",
+          onComplete: () => { gsap.set(sweep.current, { opacity: 0 }); window.setTimeout(() => { sweeping = false; }, 1600); },
+        });
+      }
+    });
+  }, []);
+  return (
+    <div className="lab-backdrop" aria-hidden="true">
+      <div className="lab-grain" />
+      <div className="lab-far" ref={far}>
+        {Array.from({ length: 8 }, (_, i) => (
+          <div className={`lab-far-item ${i % 2 ? "right" : "left"}`} key={i} style={{ top: `${i * 175 + 60}px` }}>
+            {i % 3 === 0 ? <span className="lab-kmpost mono">{120 + i * 4}<small>km</small></span>
+              : i % 3 === 1 ? <span className="lab-sign lab-sign-curve" /> : <span className="lab-sign lab-sign-speed mono">60</span>}
+          </div>
+        ))}
+      </div>
+      <div className="lab-near" ref={near}>
+        <span className="lab-margin-lane left" /><span className="lab-margin-lane right" />
+        <span className="lab-kerb left" /><span className="lab-kerb right" />
+      </div>
+      <div className="lab-sweep" ref={sweep} />
+    </div>
+  );
+}
+
+/** A fixed GPS-style strip: current chapter, speed with a needle, and the trip meter. */
+function Hud() {
+  const chapter = useRef<HTMLSpanElement>(null), speed = useRef<HTMLSpanElement>(null), needle = useRef<SVGLineElement>(null);
+  useEffect(() => {
+    let shown = "";
+    return onDrive(() => {
+      if (chapter.current && shown !== drive.chapter) { shown = drive.chapter; chapter.current.textContent = shown; }
+      if (speed.current) speed.current.textContent = String(Math.round(drive.kmh)).padStart(3, "0");
+      if (needle.current) needle.current.style.transform = `rotate(${(-120 + (drive.kmh / MAX_KMH) * 240).toFixed(1)}deg)`;
+    });
+  }, []);
+  return (
+    <div className="lab-hud" role="status" aria-label="Trip readout">
+      <span className="lab-hud-pin" aria-hidden="true" />
+      <span className="lab-hud-chapter" ref={chapter}>Start</span>
+      <span className="lab-hud-gauge" aria-hidden="true">
+        <svg viewBox="-20 -20 40 40"><path d="M-14 8 A16 16 0 1 1 14 8" className="arc" /><line ref={needle} x1="0" y1="0" x2="0" y2="-13" className="needle" /></svg>
+      </span>
+      <span className="lab-hud-speed mono"><span ref={speed}>000</span> km/h</span>
+      <span className="lab-hud-odo"><TripMeter digits={5} /> <small>km</small></span>
+    </div>
+  );
+}
+
+// ----- Chapter 1: the hero drives ---------------------------------------------------------------
+
+function Hero({ light }: { light: boolean }) {
   const [type, setType] = useState("");
   const vehicles = useVehicles(type);
   const count = String(vehicles.data?.count ?? 0).padStart(3, "0");
-  const road = useRef<HTMLDivElement>(null);
-  const dashes = useRef<HTMLSpanElement>(null);
-  // The road "drives" at a cruising speed and accelerates with scroll velocity, then eases back.
-  // Distance is integrated every frame, so the dashes never jump when the speed changes, and only
-  // the dash strip's transform is written (compositor-only, no style recalculation of the page).
-  useEffect(() => {
-    const strip = dashes.current, section = road.current;
-    if (!strip || !section || prefersReducedMotion()) return;
-    const CYCLE = 82, CRUISE = 70, MAX = 900;          // px of road per second
-    let distance = 0, speed = CRUISE, scrollVelocity = 0, lastY = window.scrollY, lastScroll = performance.now();
-    let previous = 0, frame = 0, visible = true;
-    const onScroll = () => {
-      const now = performance.now(), dt = Math.max(16, now - lastScroll);
-      scrollVelocity = Math.min(MAX, Math.abs(window.scrollY - lastY) / dt * 1000);
-      lastY = window.scrollY;
-      lastScroll = now;
-    };
-    const tick = (now: number) => {
-      const dt = previous ? Math.min(0.05, (now - previous) / 1000) : 0;
-      previous = now;
-      scrollVelocity *= Math.exp(-dt * 4);              // scroll impulse fades out
-      const target = CRUISE + scrollVelocity * 0.8;
-      speed += (target - speed) * (1 - Math.exp(-dt * 5)); // critically damped follow, frame-rate independent
-      distance = (distance + speed * dt) % CYCLE;
-      strip.style.transform = `translate3d(0, ${(distance - CYCLE).toFixed(2)}px, 0)`;
-      if (visible) frame = requestAnimationFrame(tick);
-    };
-    const observer = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
-      if (visible) { previous = 0; cancelAnimationFrame(frame); frame = requestAnimationFrame(tick); }
-    });
-    observer.observe(section);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => { cancelAnimationFrame(frame); observer.disconnect(); window.removeEventListener("scroll", onScroll); };
+  const section = useRef<HTMLElement>(null), headline = useRef<HTMLHeadingElement>(null);
+  const streaks = useRef<HTMLDivElement>(null), needle = useRef<SVGLineElement>(null), kmh = useRef<HTMLSpanElement>(null);
+  const flatDashes = useRef<HTMLSpanElement>(null);
+  const [use3D] = useState(canRun3D);
+  const [onScreen, setOnScreen] = useState(true);
+
+  // The hero is a sticky stage inside a taller section (CSS position: sticky, so no pin spacer and no layout
+  // shift): you "drive" through about one screen of scroll before the catalog arrives. The 3D road only renders
+  // while the section is on screen.
+  useLayoutEffect(() => {
+    if (reducedMotion()) return;
+    const visibility = ScrollTrigger.create({ trigger: section.current, start: "top bottom", end: "bottom top",
+      onToggle: self => setOnScreen(self.isActive) });
+    return () => visibility.kill();
   }, []);
+
+  // Per frame, from the shared drive state: headline stretch, streaks, speedometer, 2D road fallback.
+  useEffect(() => {
+    let distance = 0;
+    return onDrive(dt => {
+      const t = drive.throttle;
+      if (headline.current) headline.current.style.transform =
+        `scaleX(${(1 + t * 0.22).toFixed(3)}) skewX(${(-t * 9).toFixed(2)}deg)`;
+      if (streaks.current) {
+        streaks.current.style.opacity = (t * 0.9).toFixed(3);
+        streaks.current.style.transform = `scaleY(${(0.6 + t * 1.4).toFixed(3)})`;
+      }
+      if (needle.current) needle.current.style.transform = `rotate(${(-125 + (drive.kmh / MAX_KMH) * 250).toFixed(1)}deg)`;
+      if (kmh.current) kmh.current.textContent = String(Math.round(drive.kmh)).padStart(3, "0");
+      if (flatDashes.current) {
+        distance = (distance + (40 + t * 1400) * dt) % 82;
+        flatDashes.current.style.transform = `translate3d(0, ${(distance - 82).toFixed(1)}px, 0) scaleY(${(1 + t * 2.5).toFixed(2)})`;
+      }
+    });
+  }, []);
+
   return (
-    <section className="lab-hero">
-      <div className="lab-hero-copy">
-        <h1>Your next <br />stretch <br />of <em>road.</em></h1>
-        <p>Cars and bikes from local owners across Tamil Nadu. Pick a time, watch the price, take the keys.</p>
-      </div>
-      <div className="lab-road" ref={road}>
-        <div className="lab-road-surface"><span className="lab-road-dashes" ref={dashes} /></div>
-        <div className="lab-counter">
-          <small>Free right now</small>
-          <Odometer value={count} />
+    <section className="lab-hero" ref={section} data-chapter="Highway 1 · Start">
+      <div className="lab-hero-stage">
+      <div className="lab-hero-scene">
+        {use3D ? (
+          <Suspense fallback={<FlatRoad dashes={flatDashes} />}>
+            <Road3D light={light} active={onScreen} />
+          </Suspense>
+        ) : <FlatRoad dashes={flatDashes} />}
+        <div className="lab-streaks" ref={streaks} aria-hidden="true">
+          {Array.from({ length: 14 }, (_, i) => <span key={i} style={{ left: `${(i * 7.3 + (i % 3) * 2) % 100}%`, animationDelay: `${(i % 5) * -0.13}s` }} />)}
         </div>
+      </div>
+      <div className="lab-hero-copy">
+        <h1 ref={headline}>Your next <br />stretch <br />of <em>road.</em></h1>
+        <p>Cars and bikes from local owners across Tamil Nadu. Pick a time, watch the price, take the keys.</p>
+        <p className="lab-cue"><span className="lab-cue-wheel" aria-hidden="true" /> Scroll to drive</p>
+      </div>
+      <div className="lab-dash">
+        <div className="lab-speedo" aria-hidden="true">
+          <svg viewBox="-60 -60 120 120">
+            <path className="arc" d="M-42 30 A52 52 0 1 1 42 30" />
+            <path className="arc-red" d="M33 -40 A52 52 0 0 1 49 18" />
+            {Array.from({ length: 9 }, (_, i) => {
+              const angle = (-125 + i * 31.25) * Math.PI / 180;
+              return <line key={i} className="tick" x1={Math.sin(angle) * 44} y1={-Math.cos(angle) * 44} x2={Math.sin(angle) * 52} y2={-Math.cos(angle) * 52} />;
+            })}
+            <line ref={needle} className="needle" x1="0" y1="6" x2="0" y2="-46" />
+            <circle r="6" className="hub" />
+          </svg>
+          <span className="lab-speedo-read mono"><span ref={kmh}>{String(IDLE_KMH).padStart(3, "0")}</span><small>km/h</small></span>
+        </div>
+        <div className="lab-counter"><small>Free right now</small><Odometer value={count} /></div>
         <div className="lab-cluster">
           <div><small>Type</small>
             <div className="lab-seg" role="group" aria-label="Vehicle type">
@@ -169,27 +308,52 @@ function Hero() {
               ))}
             </div>
           </div>
-          <div><small>Pickup</small><b className="mono">29 Nov · 09:00</b></div>
-          <div><small>Return</small><b className="mono">01 Dec · 18:00</b></div>
+          <div><small>Trip meter</small><TripMeter digits={5} className="lab-cluster-trip" /></div>
           <button className="lab-go">Search</button>
         </div>
       </div>
-      <p className="lab-hint">Try: switch Cars / Bikes and watch the count roll. Scroll to speed up the road.</p>
+      </div>
     </section>
   );
 }
 
+function FlatRoad({ dashes }: { dashes: React.RefObject<HTMLSpanElement | null> }) {
+  return <div className="lab-flatroad"><div className="lab-road-surface"><span className="lab-road-dashes" ref={dashes} /></div></div>;
+}
+
+// ----- Chapter 2: key tags drop onto the rack ---------------------------------------------------
+
 function Catalog() {
   const vehicles = useVehicles("");
   const rows = vehicles.data?.results.slice(0, 6) ?? [];
+  const rack = useRef<HTMLDivElement>(null);
+  const [dropped, setDropped] = useState(false);
+  const section = useOnce<HTMLElement>(() => setDropped(true), "top 70%");
+  // When the rack scrolls in, the tags fall onto their hooks and swing until they settle (one damped swing each).
+  useLayoutEffect(() => {
+    if (!dropped || !rack.current || !rows.length) return;
+    const tags = rack.current.querySelectorAll(".lab-drop");
+    if (reducedMotion()) { gsap.set(tags, { opacity: 1, y: 0, rotation: 0 }); return; }
+    const ctx = gsap.context(() => {
+      gsap.fromTo(tags, { y: -360, opacity: 0, rotation: (i: number) => (i % 2 ? 16 : -16) },
+        { y: 0, opacity: 1, duration: 0.55, ease: "power3.in", stagger: 0.09 });
+      gsap.to(tags, { rotation: 0, duration: 1.8, ease: "elastic.out(1.1, 0.28)", stagger: 0.09, delay: 0.5 });
+    }, rack);
+    return () => ctx.revert();
+  }, [dropped, rows.length]);
   return (
-    <section className="lab-catalog">
+    <section className="lab-catalog" ref={section} data-chapter="Exit 2 · The rack">
       <div className="lab-lane-head">
-        <h2>{vehicles.data ? <><Odometer value={String(vehicles.data.count)} size="md" /> on the road</> : "On the road"}</h2>
-        <p className="lab-hint">Real listings from this catalog. Hover a tag: it swings on its ring and tilts towards you.</p>
+        <h2>{vehicles.data ? <><Odometer value={String(vehicles.data.count).padStart(2, "0")} size="md" /> on the road</> : "On the road"}</h2>
+        <p className="lab-hint">Real listings from this catalog. They drop onto the rack as you arrive; hover one to swing it.</p>
       </div>
-      <div className="lab-tags">
-        {rows.map((vehicle, index) => <KeyTag key={vehicle.id} vehicle={vehicle} index={index} />)}
+      <div className="lab-rack-bar" aria-hidden="true" />
+      <div className="lab-tags" ref={rack}>
+        {rows.map((vehicle, index) => (
+          <div className="lab-drop" key={vehicle.id} style={{ opacity: dropped || reducedMotion() ? undefined : 0 }}>
+            <KeyTag vehicle={vehicle} index={index} />
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -198,15 +362,14 @@ function Catalog() {
 function KeyTag({ vehicle, index }: { vehicle: Vehicle; index: number }) {
   const ref = useRef<HTMLElement>(null);
   const armed = useRef(true);
-  // A tag swings when a person moves the pointer onto it, never because the page scrolled it under a
-  // resting cursor; it swings once per visit and settles on its own.
+  // Swings when a person moves the pointer onto it (never because the page scrolled under the cursor).
   const tilt = (event: ReactPointerEvent) => {
     const tag = ref.current!;
     if (event.pointerType !== "mouse" || scrolling.active) return;
-    if (armed.current && !prefersReducedMotion()) {
+    if (armed.current && !reducedMotion()) {
       armed.current = false;
       tag.classList.remove("swinging");
-      void tag.offsetWidth;  // restart the swing keyframes
+      void tag.offsetWidth;
       tag.classList.add("swinging");
     }
     const box = tag.getBoundingClientRect();
@@ -230,7 +393,7 @@ function KeyTag({ vehicle, index }: { vehicle: Vehicle; index: number }) {
       <span className="lab-tag-hole" aria-hidden="true" />
       {cover ? <img src={cover.small} srcSet={`${cover.small} 400w, ${cover.large} 1200w`} sizes="(max-width: 700px) 100vw, 400px"
         width={cover.width ?? undefined} height={cover.height ?? undefined} style={{ backgroundColor: cover.color ?? undefined }}
-        alt={vehicle.name} loading={index < 3 ? "eager" : "lazy"} /> : <div className="lab-tag-noimg" />}
+        alt={vehicle.name} loading="lazy" decoding="async" /> : <div className="lab-tag-noimg" />}
       <span className="lab-plate mono">ML·{String(vehicle.id).padStart(4, "0")}</span>
       <h3>{vehicle.name}</h3>
       <p className="lab-meta">{[vehicle.location, vehicle.transmission, vehicle.seats ? `${vehicle.seats} seats` : null].filter(Boolean).join(" · ")}</p>
@@ -242,7 +405,71 @@ function KeyTag({ vehicle, index }: { vehicle: Vehicle; index: number }) {
   );
 }
 
-// ----- Trip timeline + time road ------------------------------------------------------------
+// ----- Chapter 3: how it works, a road you draw by scrolling ------------------------------------
+
+const HOW = [
+  { title: "Pick a time", text: "Choose pickup and return on the time road; the price rolls as you drag.", icon: "clock" },
+  { title: "Owner approves", text: "The owner confirms within 24 hours. You pay the rental and a refundable deposit.", icon: "stamp" },
+  { title: "Take the keys", text: "Pickup opens an hour before your slot. The owner hands over the keys.", icon: "key" },
+  { title: "Return", text: "Bring it back on time; the deposit comes back to you automatically.", icon: "flag" },
+];
+
+function HowItWorks() {
+  const section = useRef<HTMLElement>(null), road = useRef<SVGPathElement>(null), car = useRef<SVGGElement>(null);
+  const stops = useRef<(HTMLLIElement | null)[]>([]);
+  // The road draws as you scroll through this chapter (scrubbed, so scrolling back un-draws it), a car follows
+  // the leading edge, and each stop wakes up with its own small animation when the road reaches it.
+  useLayoutEffect(() => {
+    const path = road.current!, length = path.getTotalLength();
+    const marks = [0.06, 0.36, 0.64, 0.94];
+    const place = (progress: number) => {
+      path.style.strokeDashoffset = String(length * (1 - progress));
+      const point = path.getPointAtLength(length * progress);
+      car.current?.setAttribute("transform", `translate(${point.x.toFixed(1)} ${point.y.toFixed(1)})`);
+      marks.forEach((mark, i) => stops.current[i]?.classList.toggle("on", progress >= mark));
+    };
+    path.style.strokeDasharray = String(length);
+    if (reducedMotion()) { place(1); return; }
+    place(0);
+    const trigger = ScrollTrigger.create({ trigger: section.current, start: "top 65%", end: "bottom 70%", scrub: 0.6,
+      onUpdate: self => place(self.progress) });
+    return () => trigger.kill();
+  }, []);
+  return (
+    <section className="lab-how" ref={section} data-chapter="Junction 3 · How it works">
+      <h2>How a rental <em>drives</em></h2>
+      <div className="lab-how-road">
+        <svg viewBox="0 0 1200 260" preserveAspectRatio="none" aria-hidden="true">
+          <path className="lab-how-asphalt" d="M20 200 C 220 200, 260 60, 460 60 S 700 200, 900 190 S 1120 70, 1180 70" />
+          <path className="lab-how-ghost" d="M20 200 C 220 200, 260 60, 460 60 S 700 200, 900 190 S 1120 70, 1180 70" />
+          <path ref={road} className="lab-how-lane" d="M20 200 C 220 200, 260 60, 460 60 S 700 200, 900 190 S 1120 70, 1180 70" />
+          <g ref={car}><rect x="-14" y="-8" width="28" height="16" rx="4" className="lab-how-car" /></g>
+        </svg>
+        <ol className="lab-how-stops">
+          {HOW.map((stop, i) => (
+            <li key={stop.title} ref={el => { stops.current[i] = el; }} className={`lab-how-stop icon-${stop.icon}`}>
+              <StopIcon kind={stop.icon} />
+              <b>{stop.title}</b>
+              <p>{stop.text}</p>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
+function StopIcon({ kind }: { kind: string }) {
+  const icons: Record<string, ReactNode> = {
+    clock: <><circle cx="24" cy="24" r="18" className="ring" /><line x1="24" y1="24" x2="24" y2="12" className="hand hand-long" /><line x1="24" y1="24" x2="32" y2="24" className="hand hand-short" /></>,
+    stamp: <><rect x="8" y="10" width="32" height="28" rx="3" className="ring" /><path d="M15 25 l6 6 l12 -14" className="check" /></>,
+    key: <g className="key"><circle cx="16" cy="18" r="8" className="ring" /><path d="M22 23 L38 39 M32 33 l4 -4 M28 29 l3 -3" className="ring" /></g>,
+    flag: <><line x1="12" y1="8" x2="12" y2="42" className="ring" /><path d="M12 9 C 22 5, 28 15, 38 10 L38 26 C 28 31, 22 21, 12 25 Z" className="flag" /></>,
+  };
+  return <svg className="lab-stop-icon" viewBox="0 0 48 48" aria-hidden="true">{icons[kind]}</svg>;
+}
+
+// ----- Chapter 4: the trip (timeline road + time road + price) ---------------------------------
 
 const STOPS = [
   { label: "You requested", time: "22 Nov · 10:23", color: "pending" },
@@ -252,12 +479,11 @@ const STOPS = [
 ];
 
 function Trip() {
-  const path = useRef<SVGPathElement>(null);
   const [run, setRun] = useState(0);
   return (
-    <section className="lab-trip">
+    <section className="lab-trip" data-chapter="Stage 4 · Your trip">
       <div className="lab-trip-road">
-        <TimelineRoad key={run} pathRef={path} />
+        <TimelineRoad key={run} />
         <button className="lab-replay" onClick={() => setRun(run + 1)}>Replay the road</button>
       </div>
       <TripTicket />
@@ -265,41 +491,32 @@ function Trip() {
   );
 }
 
-function TimelineRoad({ pathRef }: { pathRef: React.RefObject<SVGPathElement | null> }) {
-  const car = useRef<SVGGElement>(null);
+function TimelineRoad() {
+  const path = useRef<SVGPathElement>(null), car = useRef<SVGGElement>(null);
   const [reached, setReached] = useState(0);
-  const draw = () => {
-    // The road draws to the current stop (3 of 4) the first time it scrolls into view, with the car
-    // following the path. Only the path's dash and the car's transform change per frame; React state
-    // changes three times in total, once per stop reached.
-    const path = pathRef.current, marker = car.current;
-    if (!path || !marker) return;
-    const total = path.getTotalLength(), target = total * 0.62;
+  const wrapper = useOnce<HTMLDivElement>(() => {
+    const line = path.current, marker = car.current;
+    if (!line || !marker) return;
+    const total = line.getTotalLength(), target = total * 0.62;
     const stops = [0, 0.27, 0.62].map(f => f * total);
-    const duration = prefersReducedMotion() ? 0 : 2200;
-    const start = performance.now();
-    let shown = 0;
-    const step = (now: number) => {
-      const t = duration ? Math.min(1, (now - start) / duration) : 1;
-      const eased = 1 - Math.pow(1 - t, 3);
-      const length = target * eased;
-      path.style.strokeDasharray = `${length.toFixed(1)} ${total.toFixed(1)}`;
-      const point = path.getPointAtLength(length);
+    const state = { length: 0 };
+    let shown = -1;
+    const render = () => {
+      line.style.strokeDasharray = `${state.length.toFixed(1)} ${total.toFixed(1)}`;
+      const point = line.getPointAtLength(state.length);
       marker.setAttribute("transform", `translate(${point.x.toFixed(1)} ${point.y.toFixed(1)})`);
-      const count = stops.filter(s => s <= length + 1).length;
+      const count = stops.filter(s => s <= state.length + 1).length;
       if (count !== shown) { shown = count; setReached(count); }
-      if (t < 1) requestAnimationFrame(step);
     };
-    requestAnimationFrame(step);
-  };
-  const wrapper = useRevealOnce<HTMLDivElement>(draw);
+    gsap.to(state, { length: target, duration: reducedMotion() ? 0 : 2.2, ease: "power3.out", onUpdate: render, onComplete: render });
+  }, "top 70%");
   const d = "M60 20 C 60 160, 100 200, 100 300 S 60 440, 60 560 S 100 680, 100 740";
   return (
     <div className="lab-timeline" ref={wrapper}>
       <svg viewBox="0 0 160 760" aria-hidden="true">
         <path d={d} className="lab-asphalt" />
         <path d={d} className="lab-ghost-lane" />
-        <path d={d} className="lab-drawn-lane" ref={pathRef} />
+        <path d={d} className="lab-drawn-lane" ref={path} />
         <g ref={car}><circle r="11" className="lab-car" /></g>
       </svg>
       <ol>
@@ -315,17 +532,17 @@ function TimelineRoad({ pathRef }: { pathRef: React.RefObject<SVGPathElement | n
 }
 
 // Time road for 23 Nov: an earlier rental until 10:00, then a 2-hour cleaning window.
-const BOOKED_UNTIL = 10 * 2;      // in half-hours
-const CLEANING_UNTIL = 12 * 2;
-const DAY = 48;
+const BOOKED_UNTIL = 10 * 2, CLEANING_UNTIL = 12 * 2, DAY = 48;
 
 function TripTicket() {
-  const [pickup, setPickup] = useState(CLEANING_UNTIL + 2);  // 13:00
+  const [pickup, setPickup] = useState(CLEANING_UNTIL + 2);
   const [bump, setBump] = useState(false);
-  const length = 6;  // a 3-hour rental
+  const [counted, setCounted] = useState(false);
+  const length = 6;
   const track = useRef<HTMLDivElement>(null);
   const hours = useMemo(() => length / 2, [length]);
   const price = 650 * Math.max(1, Math.ceil(hours / 24));
+  const ticket = useOnce<HTMLDivElement>(() => setCounted(true), "top 65%");  // the price rolls up when you arrive
   const place = (slot: number) => {
     const clamped = Math.max(0, Math.min(DAY - length, slot));
     if (clamped < CLEANING_UNTIL) {
@@ -341,18 +558,19 @@ function TripTicket() {
     place(Math.round(((event.clientX - box.left) / box.width) * DAY));
   };
   const time = (slot: number) => `${String(Math.floor(slot / 2)).padStart(2, "0")}:${slot % 2 ? "30" : "00"}`;
+  const money = (value: number) => counted ? value.toLocaleString("en-IN") : "0,000".slice(-value.toLocaleString("en-IN").length);
   return (
-    <div className="lab-ticket">
+    <div className="lab-ticket" ref={ticket}>
       <h2>Honda Activa 6G</h2>
       <span className="lab-status">● On the road</span>
       <div className="lab-slots">
-        <div><small>Pickup</small><Odometer value={time(pickup).replace(":", ":")} size="md" /></div>
+        <div><small>Pickup</small><Odometer value={time(pickup)} size="md" /></div>
         <div className="lab-right"><small>Return</small><Odometer value={time(pickup + length)} size="md" /></div>
       </div>
       <div className="lab-breakdown">
         <div className="lab-row lab-weekend"><span>1 weekend day × ₹650</span><span className="mono">₹{price.toLocaleString("en-IN")}</span></div>
         <div className="lab-row lab-deposit"><span>Refundable deposit</span><span className="mono">₹1,000</span></div>
-        <div className="lab-total"><span>Due at payment</span><span className="lab-total-amount"><span className="odo-sep">₹</span><Odometer value={(price + 1000).toLocaleString("en-IN")} size="md" /></span></div>
+        <div className="lab-total"><span>Due at payment</span><span className="lab-total-amount"><span className="odo-sep">₹</span><Odometer value={money(price + 1000)} size="md" /></span></div>
       </div>
       <div className="lab-timeroad">
         <small>Time road · 23 Nov · drag the car (or use ← →)</small>
@@ -373,5 +591,40 @@ function TripTicket() {
         <p className={`lab-earliest${bump ? " show" : ""}`}>Cleaning window after the previous rental: earliest pickup 12:00.</p>
       </div>
     </div>
+  );
+}
+
+// ----- Chapter 5: the toll gate -----------------------------------------------------------------
+
+function Finish() {
+  const section = useRef<HTMLElement>(null), arm = useRef<SVGGElement>(null), lights = useRef<SVGCircleElement>(null);
+  // The barrier lifts as you roll up to it (scrubbed), and the light turns from red to green at the top.
+  useLayoutEffect(() => {
+    if (reducedMotion()) { gsap.set(arm.current, { rotation: -78, svgOrigin: "60 120" }); lights.current?.classList.add("go"); return; }
+    const ctx = gsap.context(() => {
+      gsap.fromTo(arm.current, { rotation: 0, svgOrigin: "60 120" }, {
+        rotation: -78, svgOrigin: "60 120", ease: "none",
+        scrollTrigger: { trigger: section.current, start: "top 75%", end: "top 25%", scrub: 0.5,
+          onUpdate: self => lights.current?.classList.toggle("go", self.progress > 0.92) },
+      });
+    }, section);
+    return () => ctx.revert();
+  }, []);
+  return (
+    <section className="lab-finish" ref={section} data-chapter="Toll gate · Finish">
+      <svg className="lab-gate" viewBox="0 -240 900 460" aria-hidden="true">
+        <rect x="0" y="176" width="900" height="44" className="lab-gate-road" />
+        <g className="lab-gate-check">{Array.from({ length: 30 }, (_, i) => <rect key={i} x={i * 30} y={i % 2 ? 176 : 186} width="30" height="10" />)}</g>
+        <rect x="40" y="96" width="40" height="80" className="lab-gate-post" />
+        <circle ref={lights} cx="60" cy="86" r="9" className="lab-gate-light" />
+        <g ref={arm}>
+          <rect x="60" y="112" width="400" height="16" rx="3" className="lab-gate-arm" />
+          {Array.from({ length: 5 }, (_, i) => <rect key={i} x={90 + i * 76} y="112" width="38" height="16" className="lab-gate-stripe" />)}
+        </g>
+      </svg>
+      <h2>The road's <em>open.</em></h2>
+      <p>Pick a vehicle, choose your time, and watch the meter.</p>
+      <a className="lab-finish-cta" href="/app/vehicles">Find your vehicle</a>
+    </section>
   );
 }
