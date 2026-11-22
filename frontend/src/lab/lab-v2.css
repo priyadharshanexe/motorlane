@@ -212,3 +212,9 @@
 .lab[data-theme="light"] .lab-bar .lab-note { background: rgba(248, 245, 238, .85); padding: 4px 10px; border-radius: 999px; color: #3E4249; }
 .lab[data-theme="light"] .lab-toggle { background: rgba(248, 245, 238, .9); }
 .lab[data-theme="light"] .lab-mark { background: rgba(248, 245, 238, .85); padding: 6px 12px 6px 8px; border-radius: 8px; }
+/* Header labels keep a solid enough backing over the scene at night too. */
+.lab .lab-bar .lab-note { background: rgba(18, 20, 23, .82); padding: 4px 10px; border-radius: 999px; }
+.lab .lab-toggle { background: rgba(18, 20, 23, .82); }
+.lab .lab-mark { background: rgba(18, 20, 23, .7); padding: 6px 12px 6px 8px; border-radius: 8px; }
+.lab[data-theme="light"] .lab-bar .lab-note, .lab[data-theme="light"] .lab-toggle { background: rgba(248, 245, 238, .9); }
+.lab[data-theme="light"] .lab-mark { background: rgba(248, 245, 238, .85); }

@@ -1,7 +1,7 @@
 // The hero's signature 3D moment: a Tamil Nadu highway seen from the driver's seat, built only from primitives
 // (no downloaded models). Everything near the road streams past at the shared `drive` speed, so scenery adds
 // parallax and makes speed visible:
-//   near:   lane dashes, reflector posts with cat's-eyes, milestones (white, yellow top, real catalog cities),
+//   near:   lane dashes, one steel W-beam guard rail per side with reflector studs, milestones (white, yellow top, real catalog cities),
 //           a guard rail in stretches;
 //   middle: coconut palms, roadside trees, streetlights (pools of light at night), paddy-field rows;
 //   far:    a low Western Ghats ridge and a temple gopuram on the horizon, drifting slowly; a moon at night.
@@ -122,7 +122,6 @@ const gopuram = () => {
 };
 
 const DASHES = 38, DASH_SPACING = 4;  // tight enough that a dash is always in the bottom of the frame
-const POSTS = 44, POST_SPACING = 7;
 const MILESTONES = 5, MILE_SPACING = 32;
 const RAIL_POSTS = 76, RAIL_POST_SPACING = 4, RAIL_X = 5.05;  // posts every 2 units per side
 const PALMS = 36, PALM_SPACING = 8.5, FRONDS = 5;
@@ -152,12 +151,12 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
   useEffect(() => () => milestones.forEach(t => t.dispose()), [milestones]);
   useEffect(() => () => sky.dispose(), [sky]);
 
-  const dashes = useRef<THREE.InstancedMesh>(null), posts = useRef<THREE.InstancedMesh>(null), eyes = useRef<THREE.InstancedMesh>(null);
+  const dashes = useRef<THREE.InstancedMesh>(null);
   const railPosts = useRef<THREE.InstancedMesh>(null), studs = useRef<THREE.InstancedMesh>(null), trunks = useRef<THREE.InstancedMesh>(null), fronds = useRef<THREE.InstancedMesh>(null);
   const canopies = useRef<THREE.InstancedMesh>(null), treeTrunks = useRef<THREE.InstancedMesh>(null), poles = useRef<THREE.InstancedMesh>(null);
   const lamps = useRef<THREE.InstancedMesh>(null), pools = useRef<THREE.InstancedMesh>(null), shadows = useRef<THREE.InstancedMesh>(null);
-  const rows = useRef<THREE.InstancedMesh>(null);
-  const all = [dashes, posts, eyes, railPosts, studs, trunks, fronds, canopies, treeTrunks, poles, lamps, pools, shadows, rows];
+  const rows = useRef<THREE.InstancedMesh>(null), cones = useRef<THREE.InstancedMesh>(null);
+  const all = [cones, dashes, railPosts, studs, trunks, fronds, canopies, treeTrunks, poles, lamps, pools, shadows, rows];
   const mileGroup = useRef<THREE.Group>(null), ridgeA = useRef<THREE.Group>(null), ridgeB = useRef<THREE.Group>(null);
   const templeMesh = useRef<THREE.Mesh>(null);
   const travel = useRef(0);
@@ -166,7 +165,7 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
   useEffect(() => { camera.lookAt(0, 1.0, -40); }, [camera]);
   useEffect(() => {  // ?debug exposes the scene to the pop-in/pop-out check in walkthrough/popcheck.js
     if (!new URLSearchParams(location.search).has("debug")) return;
-    (window as unknown as { __labRoad: unknown }).__labRoad = { camera, meshes: { posts, railPosts, trunks, canopies, poles, rows, dashes }, stones: mileGroup };
+    (window as unknown as { __labRoad: unknown }).__labRoad = { camera, meshes: { railPosts, trunks, canopies, poles, lamps, pools, cones, rows, dashes }, stones: mileGroup };
   });
   useEffect(() => {  // palm fronds in two greens, alternating, so crowns read as leaves rather than one flat colour
     const mesh = fronds.current; if (!mesh) return;
@@ -214,12 +213,6 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
     // grow in over the last stretch before the horizon, where the haze is already thick.
     const grow = (z: number) => Math.min(1, Math.max(0.001, (z + FAR - 2) / 24));
 
-    // Reflector posts on both edges, alternating, each with a cat's-eye facing the driver.
-    for (let i = 0; i < POSTS; i++) {
-      const side = i % 2 ? 1 : -1, z = zOf(i, POST_SPACING / 2, (POSTS * POST_SPACING) / 2, s), g = grow(z);
-      set(posts.current, i, side * 4.45, 0.4 * g, z, g, g, 1 + throttle * 1.5);
-      set(eyes.current, i, side * 4.45, 0.62 * g, z + 0.07, g, g, 1 + throttle * 2.5);
-    }
     // Steel guard-rail posts with reflector studs, both sides; the W-beam itself is one continuous rail (below).
     for (let i = 0; i < RAIL_POSTS; i++) {
       const side = i % 2 ? 1 : -1, z = zOf(i, RAIL_POST_SPACING / 2, (RAIL_POSTS * RAIL_POST_SPACING) / 2, s);
@@ -228,7 +221,7 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
     }
     // Milestones on the right, beyond the rail.
     mileGroup.current?.children.forEach((stone, i) => {
-      stone.position.z = zOf(i, MILE_SPACING, MILESTONES * MILE_SPACING, s + 11);
+      stone.position.z = zOf(i, MILE_SPACING, MILESTONES * MILE_SPACING, s + 19);
       stone.scale.setScalar(grow(stone.position.z));
     });
     // Coconut palms: a leaning trunk and drooping fronds radiating from the crown.
@@ -256,10 +249,9 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
       const side = i % 2 ? 1 : -1, z = zOf(i, (LIGHT_SPACING * k) / 2, (LIGHTS * LIGHT_SPACING) / 2, s + 4), g = grow(z);
       set(poles.current, i, side * 5.6, 2.6 * g, z, g, g, g);
       set(lamps.current, i, side * 4.6, 5.1 * g, z, g, g, g);
-      // Pools fade out of the frame's bottom edge on their own; they are only kept off the last metre under the
-      // camera, where a flat decal would smear.
-      const pool = z < 1.2 ? g : 0;
-      set(pools.current, i, side * 2.3, 0.015, z, 3.2 * pool, 4 * pool, 1, -Math.PI / 2);
+      // The pool and the light cone stay attached to their lamp and leave the frame with it (never culled early).
+      set(pools.current, i, side * 2.6, 0.015, z, 3.2 * g, 4 * g, 1, -Math.PI / 2);
+      set(cones.current, i, side * 3.4, 2.55 * g, z, g, g, g);
     }
     // Paddy-field rows on both sides: thin furrows that strobe past and sell the speed.
     for (let i = 0; i < ROWS / k; i++) {
@@ -311,18 +303,19 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
 
       <instancedMesh ref={rows} args={[undefined, undefined, ROWS]}><boxGeometry args={[14, 0.02, 0.35]} /><meshBasicMaterial color={colors.paddy} /></instancedMesh>
       <instancedMesh ref={dashes} args={[undefined, undefined, DASHES]}><boxGeometry args={[0.16, 0.01, 1.8]} /><meshBasicMaterial color={colors.lane} /></instancedMesh>
-      <instancedMesh ref={posts} args={[undefined, undefined, POSTS]}><boxGeometry args={[0.12, 0.8, 0.12]} /><Lit color={colors.post} light={light} /></instancedMesh>
-      <instancedMesh ref={eyes} args={[undefined, undefined, POSTS]}><boxGeometry args={[0.1, 0.1, 0.02]} /><meshBasicMaterial color={colors.eye} toneMapped={false} /></instancedMesh>
       {/* Steel W-beam guard rails on both sides: two continuous beams (no recycling, so they never pop), on short
           posts that do recycle, with reflector studs that catch the light at night. */}
       {[-1, 1].map(side => (
         <group key={side}>
-          {[0.5, 0.7].map(y => (
-            <mesh key={y} position={[side * RAIL_X, y, NEAR - FAR / 2]}>
-              <boxGeometry args={[0.05, 0.14, FAR + 8]} />
-              {light ? <meshLambertMaterial color={y > 0.6 ? "#E3E7EC" : "#BFC5CC"} /> : <meshBasicMaterial color={y > 0.6 ? "#4E545C" : "#3C4148"} />}
-            </mesh>
-          ))}
+          <mesh position={[side * RAIL_X, 0.58, NEAR - FAR / 2]}>
+            <boxGeometry args={[0.06, 0.3, FAR + 8]} />
+            {light ? <meshLambertMaterial color="#D6DBE1" /> : <meshBasicMaterial color="#474D55" />}
+          </mesh>
+          {/* the W-beam's centre fold, as a thin darker line on the road-facing side */}
+          <mesh position={[side * (RAIL_X - 0.035), 0.58, NEAR - FAR / 2]}>
+            <boxGeometry args={[0.01, 0.035, FAR + 8]} />
+            <meshBasicMaterial color={light ? "#9AA2AB" : "#2C3036"} />
+          </mesh>
         </group>
       ))}
       <instancedMesh ref={railPosts} args={[undefined, undefined, RAIL_POSTS]}><boxGeometry args={[0.09, 0.66, 0.09]} /><Lit color={light ? "#9DA4AC" : "#30353B"} light={light} /></instancedMesh>
@@ -337,6 +330,11 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
       <instancedMesh ref={canopies} args={[undefined, undefined, TREES]}><icosahedronGeometry args={[1, 1]} /><Lit color={colors.tree} light={light} /></instancedMesh>
       <instancedMesh ref={poles} args={[undefined, undefined, LIGHTS]}><boxGeometry args={[0.1, 5.2, 0.1]} /><Lit color={colors.post} light={light} /></instancedMesh>
       <instancedMesh ref={lamps} args={[undefined, undefined, LIGHTS]}><boxGeometry args={[2, 0.12, 0.22]} /><meshBasicMaterial color={colors.lamp} toneMapped={false} /></instancedMesh>
+      {/* Faint additive light cones under each lamp at night: the "rays" that make the pools read as light. */}
+      <instancedMesh ref={cones} args={[undefined, undefined, LIGHTS]} visible={colors.poolOpacity > 0}>
+        <coneGeometry args={[1.9, 5.1, 28, 1, true]} />
+        <meshBasicMaterial color={colors.pool} transparent opacity={0.045} blending={THREE.AdditiveBlending} depthWrite={false} side={THREE.DoubleSide} />
+      </instancedMesh>
       <instancedMesh ref={pools} args={[undefined, undefined, LIGHTS]} visible={colors.poolOpacity > 0}>
         <planeGeometry args={[1, 1]} />
         <meshBasicMaterial color={colors.pool} alphaMap={blob} transparent opacity={colors.poolOpacity} blending={THREE.AdditiveBlending} depthWrite={false} />
