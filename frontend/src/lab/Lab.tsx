@@ -112,6 +112,7 @@ function Odometer({ value, size = "lg" }: { value: string; size?: "lg" | "md" })
 /** A trip-meter odometer driven every frame from `drive.km`: the last wheel turns continuously, like the real thing. */
 function TripMeter({ digits = 5, className = "" }: { digits?: number; className?: string }) {
   const strips = useRef<(HTMLSpanElement | null)[]>([]);
+  const last = useRef<number[]>([]);
   // Wheels sit exactly on a digit at rest. Only the tenths wheel rolls, in the last fifth of each tenth, and a
   // wheel to its left rolls only while every wheel to its right goes 9 -> 0 (a real odometer's carry). Offsets are
   // whole device pixels of a wheel height chosen so 100/125/150% scaling all land on pixel boundaries.
@@ -129,7 +130,8 @@ function TripMeter({ digits = 5, className = "" }: { digits?: number; className?
         roll = t * t * (3 - 2 * t);
       } else roll = carry;
       carry = digit === 9 ? roll : 0;
-      if (strip && height) strip.style.transform = `translate3d(0, ${-Math.round((digit + roll) * height * dpr) / dpr}px, 0)`;
+      const y = -Math.round((digit + roll) * height * dpr) / dpr;
+      if (strip && height && last.current[i] !== y) { last.current[i] = y; strip.style.transform = `translate3d(0, ${y}px, 0)`; }
     }
   }), [digits]);
   return (
@@ -211,10 +213,11 @@ function Backdrop() {
 function Hud() {
   const chapter = useRef<HTMLSpanElement>(null), speed = useRef<HTMLSpanElement>(null), needle = useRef<SVGLineElement>(null);
   useEffect(() => {
-    let shown = "";
+    let shown = "", shownSpeed = -1;
     return onDrive(() => {
       if (chapter.current && shown !== drive.chapter) { shown = drive.chapter; chapter.current.textContent = shown; }
-      if (speed.current) speed.current.textContent = String(Math.round(drive.kmh)).padStart(3, "0");
+      const rounded = Math.round(drive.kmh);
+      if (speed.current && rounded !== shownSpeed) { shownSpeed = rounded; speed.current.textContent = String(rounded).padStart(3, "0"); }
       if (needle.current) needle.current.style.transform = `rotate(${(-120 + (drive.kmh / MAX_KMH) * 240).toFixed(1)}deg)`;
     });
   }, []);
@@ -239,7 +242,7 @@ function Hero({ light }: { light: boolean }) {
   const count = String(vehicles.data?.count ?? 0).padStart(3, "0");
   const section = useRef<HTMLElement>(null), headline = useRef<HTMLHeadingElement>(null);
   const streaks = useRef<HTMLDivElement>(null), needle = useRef<SVGLineElement>(null), kmh = useRef<HTMLSpanElement>(null);
-  const flatDashes = useRef<HTMLSpanElement>(null);
+  const flatDashes = useRef<HTMLSpanElement>(null), sheet = useRef<HTMLSpanElement>(null);
   const [use3D] = useState(canRun3D);
   // Milestones name real cities from the catalog (falling back to Tamil Nadu cities while it loads).
   const everything = useVehicles("");
@@ -260,17 +263,24 @@ function Hero({ light }: { light: boolean }) {
 
   // Per frame, from the shared drive state: headline stretch, streaks, speedometer, 2D road fallback.
   useEffect(() => {
-    let distance = 0;
+    let distance = 0, streakY = 0, streaksOn = true, shownKmh = -1;
     return onDrive(dt => {
       const t = drive.throttle;
       if (headline.current) headline.current.style.transform =
         `scaleX(${(1 + t * 0.22).toFixed(3)}) skewX(${(-t * 9).toFixed(2)}deg)`;
-      if (streaks.current) {
-        streaks.current.style.opacity = (t * 0.9).toFixed(3);
-        streaks.current.style.transform = `scaleY(${(0.6 + t * 1.4).toFixed(3)})`;
+      // One sheet of streaks, moved by transform only, and switched off entirely below a crawl (no idle cost).
+      if (streaks.current && sheet.current) {
+        const on = t > 0.04;
+        if (on !== streaksOn) { streaksOn = on; streaks.current.style.visibility = on ? "visible" : "hidden"; }
+        if (on) {
+          streakY = (streakY + (900 + t * 2600) * dt) % 540;
+          streaks.current.style.opacity = (t * 0.9).toFixed(2);
+          sheet.current.style.transform = `translate3d(0, ${(streakY - 540).toFixed(0)}px, 0) scaleY(${(0.6 + t * 1.4).toFixed(2)})`;
+        }
       }
       if (needle.current) needle.current.style.transform = `rotate(${(-125 + (drive.kmh / MAX_KMH) * 250).toFixed(1)}deg)`;
-      if (kmh.current) kmh.current.textContent = String(Math.round(drive.kmh)).padStart(3, "0");
+      const rounded = Math.round(drive.kmh);  // text changes only when the number does (no per-frame layout)
+      if (kmh.current && rounded !== shownKmh) { shownKmh = rounded; kmh.current.textContent = String(rounded).padStart(3, "0"); }
       if (flatDashes.current) {
         distance = (distance + (40 + t * 1400) * dt) % 82;
         flatDashes.current.style.transform = `translate3d(0, ${(distance - 82).toFixed(1)}px, 0) scaleY(${(1 + t * 2.5).toFixed(2)})`;
@@ -288,7 +298,7 @@ function Hero({ light }: { light: boolean }) {
           </Suspense>
         ) : <FlatRoad dashes={flatDashes} />}
         <div className="lab-streaks" ref={streaks} aria-hidden="true">
-          {Array.from({ length: 14 }, (_, i) => <span key={i} style={{ left: `${(i * 7.3 + (i % 3) * 2) % 100}%`, animationDelay: `${(i % 5) * -0.13}s` }} />)}
+          <span className="lab-streaks-sheet" ref={sheet} />
         </div>
       </div>
       <div className="lab-hero-copy">

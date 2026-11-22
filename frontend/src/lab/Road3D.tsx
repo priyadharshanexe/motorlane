@@ -8,7 +8,7 @@
 // Night is dark mode, day is light mode. Instanced meshes, recycled positions, DPR capped, the frame loop stops
 // when the hero is offscreen, and this file is lazy-loaded so it never delays the first paint.
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { drive } from "./drive";
 
@@ -27,19 +27,23 @@ const palette = (light: boolean) => light ? {
   skyTop: "#0E1013", skyLow: "#2A251D", road: "#1C1F23", edge: "#D8D4CB", lane: "#FFC531", post: "#3A3F46",
   eye: "#FFB020", field: "#141E17", paddy: "#1A2A1F", trunk: "#2E2820", leaf: "#183022", tree: "#15291C",
   hill: "#22231F", hill2: "#2B2A24", gopuram: "#332F27", rail: "#4A4F56", lamp: "#FFE6A8", pool: "#FFC970",
-  shadow: 0, poolOpacity: 0.2, moon: true,
+  shadow: 0, poolOpacity: 0.16, moon: true,
 };
 
 /** A soft round blob (light pools at night, contact shadows by day). */
 function radialTexture() {
-  const canvas = Object.assign(document.createElement("canvas"), { width: 64, height: 64 });
+  // 256px with a gentle falloff and mipmaps, so the edge stays soft even when seen at a grazing angle.
+  const canvas = Object.assign(document.createElement("canvas"), { width: 256, height: 256 });
   const g = canvas.getContext("2d")!;
-  const gradient = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gradient.addColorStop(0, "rgba(255,255,255,1)");
-  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  const gradient = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  [[0, 1], [0.35, 0.7], [0.65, 0.25], [0.85, 0.06], [1, 0]].forEach(([at, alpha]) => gradient.addColorStop(at, `rgba(255,255,255,${alpha})`));
   g.fillStyle = gradient;
-  g.fillRect(0, 0, 64, 64);
-  return new THREE.CanvasTexture(canvas);
+  g.fillRect(0, 0, 256, 256);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.anisotropy = 8;
+  return texture;
 }
 
 function skyTexture(colors: Palette) {
@@ -123,7 +127,7 @@ const TREES = 12, TREE_SPACING = 13;
 const LIGHTS = 10, LIGHT_SPACING = 16;
 const ROWS = 32, ROW_SPACING = 3.2;
 
-function Scene({ light, places }: { light: boolean; places: string[] }) {
+function Scene({ light, places, lite, onSlow }: { light: boolean; places: string[]; lite: boolean; onSlow: () => void }) {
   const colors = useMemo(() => palette(light), [light]);
   const { camera } = useThree();
   const temp = useMemo(() => new THREE.Object3D(), []);
@@ -148,6 +152,12 @@ function Scene({ light, places }: { light: boolean; places: string[] }) {
   const mileGroup = useRef<THREE.Group>(null), ridgeA = useRef<THREE.Group>(null), ridgeB = useRef<THREE.Group>(null);
   const templeMesh = useRef<THREE.Mesh>(null);
   const travel = useRef(0);
+  const budget = useRef({ frames: 0, total: 0 });
+  const k = lite ? 2 : 1;  // lite mode keeps every other roadside object (same spacing along the road, half the work)
+  useEffect(() => {
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    all.forEach(ref => { const mesh = ref.current; if (!mesh) return; for (let i = 0; i < mesh.count; i++) mesh.setMatrixAt(i, zero); });
+  }, [lite]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (mesh: THREE.InstancedMesh | null, index: number, x: number, y: number, z: number,
     sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0) => {
@@ -161,10 +171,18 @@ function Scene({ light, places }: { light: boolean; places: string[] }) {
 
   useFrame((_, delta) => {
     const dt = Math.min(0.05, delta);
+    // Measure the real frame budget once (frames 30-120): if it runs slower than ~50 fps, drop to lite mode.
+    const b = budget.current;
+    if (!lite && b.frames < 120) {
+      b.frames++;
+      if (b.frames > 30) b.total += delta;
+      if (b.frames === 120 && b.total / 90 > 0.02) onSlow();
+    }
     const throttle = drive.throttle;
     travel.current += (4 + throttle * 70) * dt;  // road units per second: a crawl at idle, a rush at full throttle
     const s = travel.current;
-    const stretch = 1 + throttle * 3.2;  // near things smear into streaks with speed
+    // Dashes lengthen into streaks with speed but never close the gap (2.2 long, 6 apart: at most ~3.7 long).
+    const stretch = 1 + throttle * 0.7;
 
     for (let i = 0; i < DASHES; i++) set(dashes.current, i, 0, 0.011, zOf(i, DASH_SPACING, DASHES * DASH_SPACING, s), 1, 1, stretch);
 
@@ -182,8 +200,8 @@ function Scene({ light, places }: { light: boolean; places: string[] }) {
     // Milestones on the right.
     mileGroup.current?.children.forEach((stone, i) => { stone.position.z = zOf(i, MILE_SPACING, MILESTONES * MILE_SPACING, s + 11); });
     // Coconut palms: a leaning trunk and drooping fronds radiating from the crown.
-    for (let i = 0; i < PALMS; i++) {
-      const side = i % 2 ? 1 : -1, z = zOf(i, PALM_SPACING / 2, (PALMS * PALM_SPACING) / 2, s + 3);
+    for (let i = 0; i < PALMS / k; i++) {
+      const side = i % 2 ? 1 : -1, z = zOf(i, (PALM_SPACING * k) / 2, (PALMS * PALM_SPACING) / 2, s + 3);
       const x = side * (7.5 + ((i * 37) % 7)), h = 5 + ((i * 13) % 4) * 0.7, lean = side * (0.08 + ((i * 7) % 3) * 0.05);
       set(trunks.current, i, x + (Math.sin(lean) * h) / 2, h / 2, z, 1, h, 1, 0, 0, -lean);
       const topX = x + Math.sin(lean) * h, topY = Math.cos(lean) * h;
@@ -191,27 +209,27 @@ function Scene({ light, places }: { light: boolean; places: string[] }) {
         const angle = (f / FRONDS) * Math.PI * 2 + i;
         set(fronds.current, i * FRONDS + f, topX + Math.cos(angle) * 1.1, topY - 0.25, z - Math.sin(angle) * 1.1, 1, 1, 1, 0, angle, -0.45);
       }
-      set(shadows.current, i, x + side * 0.6, 0.012, z, 3.2, 2.2, 1, -Math.PI / 2);
+      set(shadows.current, i, x + side * 0.5, 0.012, z, 2, 1.4, 1, -Math.PI / 2);
     }
     // Rounder roadside trees further out.
-    for (let i = 0; i < TREES; i++) {
-      const side = i % 2 ? -1 : 1, z = zOf(i, TREE_SPACING / 2, (TREES * TREE_SPACING) / 2, s + 7);
+    for (let i = 0; i < TREES / k; i++) {
+      const side = i % 2 ? -1 : 1, z = zOf(i, (TREE_SPACING * k) / 2, (TREES * TREE_SPACING) / 2, s + 7);
       const x = side * (14 + ((i * 29) % 9)), r = 1.8 + ((i * 11) % 5) * 0.35;
       set(treeTrunks.current, i, x, 1.1, z, 1, 2.2, 1);
       set(canopies.current, i, x, 2.2 + r * 0.8, z, r, r * 0.85, r);
-      set(shadows.current, PALMS + i, x + 0.8, 0.012, z, r * 2.4, r * 1.8, 1, -Math.PI / 2);
+      set(shadows.current, PALMS + i, x + 0.4, 0.012, z, r * 1.6, r * 1.2, 1, -Math.PI / 2);
     }
     // Streetlights alternate sides; at night each throws a warm pool on the tarmac.
-    for (let i = 0; i < LIGHTS; i++) {
-      const side = i % 2 ? 1 : -1, z = zOf(i, LIGHT_SPACING / 2, (LIGHTS * LIGHT_SPACING) / 2, s + 4);
+    for (let i = 0; i < Math.ceil(LIGHTS / k); i++) {
+      const side = i % 2 ? 1 : -1, z = zOf(i, (LIGHT_SPACING * k) / 2, (LIGHTS * LIGHT_SPACING) / 2, s + 4);
       set(poles.current, i, side * 5.3, 2.6, z);
       set(lamps.current, i, side * 4.3, 5.1, z);
-      set(pools.current, i, side * 2.2, 0.015, z, 4.2, 4.2 * (1 + throttle * 0.6), 1, -Math.PI / 2);
+      set(pools.current, i, side * 2.3, 0.015, z, 3.2, 4, 1, -Math.PI / 2);
     }
     // Paddy-field rows on both sides: thin furrows that strobe past and sell the speed.
-    for (let i = 0; i < ROWS; i++) {
+    for (let i = 0; i < ROWS / k; i++) {
       const side = i % 2 ? 1 : -1;
-      set(rows.current, i, side * 13, 0.006, zOf(i, ROW_SPACING / 2, (ROWS * ROW_SPACING) / 2, s), 1, 1, 1 + throttle * 2);
+      set(rows.current, i, side * 13, 0.006, zOf(i, (ROW_SPACING * k) / 2, (ROWS * ROW_SPACING) / 2, s), 1, 1, 1 + throttle * 2);
     }
     all.forEach(ref => { if (ref.current) ref.current.instanceMatrix.needsUpdate = true; });
 
@@ -283,12 +301,15 @@ function Scene({ light, places }: { light: boolean; places: string[] }) {
 
 export default function Road3D({ light, active, places }: { light: boolean; active: boolean; places: string[] }) {
   const host = useRef<HTMLDivElement>(null);
+  // Lite mode on 4-core-or-fewer devices from the start, or later if the measured frame budget is too slow.
+  const [lite, setLite] = useState(() => (navigator.hardwareConcurrency ?? 8) <= 4 || new URLSearchParams(location.search).has("lite"));
+  useEffect(() => { host.current?.setAttribute("data-lite", lite ? "1" : "0"); }, [lite]);
   useEffect(() => { host.current?.setAttribute("data-ready", "1"); }, []);
   return (
     <div className="lab-road3d" ref={host}>
-      <Canvas dpr={[1, 1.25]} frameloop={active ? "always" : "never"} gl={{ antialias: true, powerPreference: "high-performance" }}
+      <Canvas dpr={lite ? 1 : [1, 1.25]} frameloop={active ? "always" : "never"} gl={{ antialias: true, powerPreference: "high-performance" }}
         camera={{ position: [0, 1.25, NEAR], fov: 58, near: 0.1, far: 150 }}>
-        <Scene light={light} places={places} />
+        <Scene light={light} places={places} lite={lite} onSlow={() => setLite(true)} />
       </Canvas>
     </div>
   );
