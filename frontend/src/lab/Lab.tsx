@@ -223,6 +223,15 @@ function Backdrop() {
 /** A fixed GPS-style strip: current chapter, speed with a needle, and the trip meter. */
 function Hud() {
   const chapter = useRef<HTMLSpanElement>(null), speed = useRef<HTMLSpanElement>(null), needle = useRef<SVGLineElement>(null);
+  const hud = useRef<HTMLDivElement>(null);
+  // The hero has its own speedometer and trip meter, so the HUD stays out of the way there and slides in once the
+  // hero has mostly scrolled away.
+  useLayoutEffect(() => {
+    const trigger = ScrollTrigger.create({ trigger: ".lab-hero", start: "top top", end: "bottom 55%",
+      onToggle: self => hud.current?.classList.toggle("away", self.isActive) });
+    hud.current?.classList.toggle("away", window.scrollY < trigger.end);
+    return () => trigger.kill();
+  }, []);
   useEffect(() => {
     let shown = "", shownSpeed = -1;
     return onDrive(() => {
@@ -233,7 +242,7 @@ function Hud() {
     });
   }, []);
   return (
-    <div className="lab-hud" role="status" aria-label="Trip readout">
+    <div className="lab-hud away" ref={hud} role="status" aria-label="Trip readout">
       <span className="lab-hud-pin" aria-hidden="true" />
       <span className="lab-hud-chapter" ref={chapter}>Start</span>
       <span className="lab-hud-gauge" aria-hidden="true">

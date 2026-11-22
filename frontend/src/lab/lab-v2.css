@@ -197,3 +197,14 @@
 .lab[data-theme="light"] .lab-car, .lab[data-theme="light"] .lab-dot { stroke: #F3F1EC; border-color: #F3F1EC; }
 .lab[data-theme="light"] .lab-gate-arm { fill: #FFFFFF; stroke: #B9B4AA; stroke-width: 1.5; }
 .lab[data-theme="light"] .lab-gate-check rect { fill: #FFFFFF; }
+
+/* ===== Page top: the header floats over the scene, which runs to the top edge ===== */
+.lab .lab-bar { position: absolute; z-index: 6; top: 0; left: 0; right: 0;
+  background: linear-gradient(color-mix(in srgb, var(--tarmac) 78%, transparent), transparent); }
+.lab .lab-hero-copy { padding-top: max(104px, 12vh); }
+.lab .lab-main { padding: 0; margin: 0; }  /* the app's global main padding would leave a band above the scene */
+.lab .lab-hero h1 { font-size: clamp(44px, min(4.4vw, 8.2vh), 76px) !important; }
+.lab .lab-dash { bottom: 32px; }
+.lab-hud { transition: opacity .35s var(--ease-out), transform .35s var(--ease-out); }
+.lab-hud.away { opacity: 0; transform: translate(-50%, 24px); pointer-events: none; }
+@media (max-height: 800px) { .lab .lab-hero-copy p { margin-top: 18px; } .lab-speedo { transform: scale(.85); transform-origin: 0 100%; } }
