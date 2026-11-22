@@ -100,7 +100,7 @@ def bookings(request):
     profile = rental_profile(request.user)
     if request.method == "GET":
         rows = Booking.objects.filter(user=profile).select_related("user__user", "review", "payment").prefetch_related(
-            vehicle_cards()).order_by(
+            vehicle_cards(), "payment__refunds").order_by(
             "-start_date", "-pk")
         return Response(BookingSerializer(rows, many=True, context={"request": request}).data)
     throttle = BookingCreationThrottle()
@@ -164,7 +164,7 @@ class OwnerBookings(generics.ListAPIView):
 
     def get_queryset(self):
         return owner_bookings(self.request.user).select_related("user__user", "review", "payment").prefetch_related(
-            vehicle_cards()).order_by("start_date", "pk")
+            vehicle_cards(), "payment__refunds").order_by("start_date", "pk")
 
 
 def visible_booking(user, pk):
@@ -172,7 +172,7 @@ def visible_booking(user, pk):
     from django.db.models import Q
     return get_object_or_404(
         Booking.objects.filter(Q(user__user=user) | Q(vehicle__owner__user=user))
-        .select_related("vehicle", "user__user", "review", "payment").select_related("vehicle__owner").prefetch_related("events"),
+        .select_related("vehicle", "user__user", "review", "payment").select_related("vehicle__owner").prefetch_related("events", "payment__refunds"),
         pk=pk,
     )
 

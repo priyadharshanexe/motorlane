@@ -161,6 +161,7 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
                     </dd>
                   </div>
                 </dl>
+                <RefundNote row={row} />
               </section>
             ) : (
               <>
@@ -208,6 +209,7 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
                   {row.picked_up_at && (
                     <p>Picked up {timestamp(row.picked_up_at)}</p>
                   )}
+                  <RefundNote row={row} />
                   {row.returned_at && (
                     <p>Returned {timestamp(row.returned_at)}</p>
                   )}
@@ -323,6 +325,20 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
       </div>
     </>
   );
+}
+
+const REFUND_TEXT = {
+  pending: "Refund of ₹{amount} is on its way.",
+  delayed: "Refund of ₹{amount} is delayed. We're on it.",
+  refunded: "₹{amount} refunded.",
+} as const;
+
+/** Where the renter's money stands, from the refunds' real progress (not just the decision to refund). */
+function RefundNote({ row }: { row: Booking }) {
+  const status = row.payment?.refund_status;
+  if (!status || !row.payment) return null;
+  const amount = Number(row.payment.refunded).toLocaleString("en-IN");
+  return <p className={`refund-note refund-${status}`}>{REFUND_TEXT[status].replace("{amount}", amount)}</p>;
 }
 
 /** "09:00:00" -> "09:00". */

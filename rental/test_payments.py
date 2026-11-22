@@ -428,3 +428,55 @@ class ProductionPaymentGuardTests(TestCase):
     def test_unknown_provider_is_e008(self):
         from django.core.checks import run_checks
         self.assertIn("rental.E008", {message.id for message in run_checks()})
+
+
+@override_settings(PAYMENT_PROVIDER="fake", DEMO_MODE=True, PAYMENT_WEBHOOK_SECRET=WEBHOOK_SECRET)
+class LockOrderAndRefundTruthTests(TestCase):
+    def setUp(self):
+        self.renter = make_profile("lock-renter")
+        vehicle = Vehicle.objects.create(name="Car", vehicle_type="Car", price_per_day=1000)
+        day = timezone.localdate() + timedelta(days=9)
+        self.booking = reserve_vehicle(self.renter.pk, vehicle.pk, day, day)
+        Booking.objects.filter(pk=self.booking.pk).update(status=Booking.Status.CONFIRMED)
+        self.payment = Payment.objects.create(booking=self.booking, provider="fake", order_id="fake_order_lock", amount=1000)
+
+    def test_webhook_locks_the_booking_before_the_payment(self):
+        """Same global order as booking transitions (booking -> payment), so they cannot deadlock."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        body = json.dumps({"event": "payment.captured", "payload": {"payment": {"entity": {
+            "id": "pay_lock", "order_id": "fake_order_lock"}}}}).encode()
+        with CaptureQueriesContext(connection) as ctx:
+            self.client.post(reverse("api_payment_webhook"), body, content_type="application/json", secure=True,
+                             HTTP_X_RAZORPAY_SIGNATURE=sign(WEBHOOK_SECRET, body), HTTP_X_RAZORPAY_EVENT_ID="evt_lock")
+        locks = [q["sql"] for q in ctx.captured_queries if "FOR UPDATE" in q["sql"]]
+        tables = ["booking" if "rental_booking" in sql.split("FROM", 1)[1][:40] else
+                  "payment" if "rental_payment" in sql.split("FROM", 1)[1][:40] else "other" for sql in locks]
+        self.assertEqual(tables[:2], ["booking", "payment"], locks)
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, "paid")
+
+    def test_refund_that_gave_up_is_shown_as_delayed_not_refunded(self):
+        from .payments.providers import PaymentError
+        from .payments.service import MAX_REFUND_ATTEMPTS, process_refund
+        Payment.objects.filter(pk=self.payment.pk).update(status="paid")
+        self.client.force_login(self.renter.user)
+        with patch.object(FakeProvider, "refund", side_effect=PaymentError("bank offline")), \
+                self.assertLogs("rental.payments.service", "WARNING"), self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse("api_booking_action", args=[self.booking.pk, "cancel"]), secure=True)
+        intent = Refund.objects.get()
+
+        def shown():
+            return self.client.get(reverse("api_booking_detail", args=[self.booking.pk]), secure=True).json()["payment"]
+
+        self.assertEqual((shown()["refund_status"], shown()["refund_confirmed"]), ("pending", "0.00"))
+        Refund.objects.filter(pk=intent.pk).update(attempts=MAX_REFUND_ATTEMPTS - 1, next_attempt_at=timezone.now())
+        with patch.object(FakeProvider, "refund", side_effect=PaymentError("bank offline")), \
+                patch.object(FakeProvider, "find_refund", return_value=None), \
+                self.assertLogs("rental.payments.service", "ERROR"):
+            process_refund(intent.pk)
+        data = shown()
+        self.assertEqual((data["refund_status"], data["refund_confirmed"], data["refunded"]), ("delayed", "0.00", "1000.00"))
+        Refund.objects.filter(pk=intent.pk).update(status="succeeded")
+        self.assertEqual((shown()["refund_status"], shown()["refund_confirmed"]), ("refunded", "1000.00"))
+        self.assertIn("refund_status", self.client.get(reverse("api_bookings"), secure=True).json()[0]["payment"])

@@ -105,7 +105,9 @@ class BookingSerializer(serializers.ModelSerializer):
         payment = getattr(booking, "payment", None) if hasattr(booking, "payment") else None
         if payment is None:
             return None
+        refund_status, confirmed = payment.refund_summary()
         return {"status": payment.status, "amount": str(payment.amount), "refunded": str(payment.refunded_amount),
+                "refund_status": refund_status, "refund_confirmed": str(confirmed),
                 "cancellation_fee": str(payment.cancellation_fee), "provider": payment.provider}
 
     def get_overdue(self, booking) -> bool:

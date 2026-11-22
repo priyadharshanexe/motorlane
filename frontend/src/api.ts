@@ -51,7 +51,10 @@ export interface Booking extends DateRange {
   return_time: string
   price_breakdown?: Partial<import('./Pricing').Quote>
   payment_required?: boolean
-  payment?: { status: string; amount: string; refunded: string; cancellation_fee: string; provider: string } | null
+  payment?: {
+    status: string; amount: string; refunded: string; cancellation_fee: string; provider: string
+    refund_status: 'pending' | 'delayed' | 'refunded' | null; refund_confirmed: string
+  } | null
 }
 export interface VehiclePhoto { id: number; url: string; small: string; large: string; order: number; is_cover: boolean }
 export interface TimelineEvent { id: number; from_status: string; to_status: string; actor: string; at: string; note: string }

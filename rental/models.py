@@ -286,6 +286,24 @@ class Payment(models.Model):
     def is_paid(self):
         return self.status in (self.Status.PAID, self.Status.PARTIALLY_REFUNDED, self.Status.REFUNDED)
 
+    def refund_summary(self):
+        """What actually happened to the refunds, for display.
+
+        `refunded_amount` is what the business has committed to refund (used for the money
+        maths). Whether that money has reached the renter depends on the refund intents:
+        returns (status, confirmed amount) with status one of None (no refund), "pending"
+        (on its way), "delayed" (an attempt gave up and staff were alerted) or "refunded".
+        """
+        intents = list(self.refunds.all())  # prefetched by the list views
+        if not intents:
+            return None, Decimal("0.00")
+        confirmed = sum((i.amount for i in intents if i.status == "succeeded"), Decimal("0.00"))
+        if any(i.status == "failed" for i in intents):
+            return "delayed", confirmed
+        if any(i.status in ("pending", "sent") for i in intents):
+            return "pending", confirmed
+        return "refunded", confirmed
+
 
 class RefundIntent(models.Model):
     """A refund the business owes, recorded in the same transaction as the decision to refund.
