@@ -469,35 +469,73 @@ const HOW = [
 ];
 
 function HowItWorks() {
-  const section = useRef<HTMLElement>(null), road = useRef<SVGPathElement>(null), car = useRef<SVGGElement>(null);
-  const stops = useRef<(HTMLLIElement | null)[]>([]);
-  // The road draws as you scroll through this chapter (scrubbed, so scrolling back un-draws it), a car follows
-  // the leading edge, and each stop wakes up with its own small animation when the road reaches it.
+  const section = useRef<HTMLElement>(null), road = useRef<SVGPathElement>(null), reveal = useRef<SVGPathElement>(null);
+  const lane = useRef<SVGPathElement>(null), car = useRef<SVGGElement>(null);
+  const stops = useRef<(HTMLLIElement | null)[]>([]), pins = useRef<(SVGGElement | null)[]>([]);
+  // Scroll draws the dashed centre line (scrubbed: scrolling back up retracts it) and drives a car along it, turned
+  // to the road's direction. Four stops sit on the road above their steps; reaching one plays that step's icon and
+  // brightens its text. The dashes also flow along the road at the HUD's speed, so it feels like driving.
   useLayoutEffect(() => {
     const path = road.current!, length = path.getTotalLength();
-    const marks = [0.06, 0.36, 0.64, 0.94];
-    const place = (progress: number) => {
-      path.style.strokeDashoffset = String(length * (1 - progress));
-      const point = path.getPointAtLength(length * progress);
-      car.current?.setAttribute("transform", `translate(${point.x.toFixed(1)} ${point.y.toFixed(1)})`);
-      marks.forEach((mark, i) => stops.current[i]?.classList.toggle("on", progress >= mark));
+    // Each stop sits where the road passes over the centre of its column (four equal columns below).
+    const lengthAtX = (x: number) => {
+      let lo = 0, hi = length;
+      for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (path.getPointAtLength(mid).x < x) lo = mid; else hi = mid; }
+      return lo;
     };
-    path.style.strokeDasharray = String(length);
+    const marks = [150, 450, 750, 1050].map(x => lengthAtX(x) / length);
+    marks.forEach((mark, i) => {
+      const point = path.getPointAtLength(mark * length);
+      pins.current[i]?.setAttribute("transform", `translate(${point.x.toFixed(1)} ${point.y.toFixed(1)})`);
+    });
+    reveal.current!.style.strokeDasharray = `${length} ${length}`;
+    const place = (progress: number) => {
+      reveal.current!.style.strokeDashoffset = String(length * (1 - progress));
+      const at = Math.max(0.5, length * progress), point = path.getPointAtLength(at), ahead = path.getPointAtLength(Math.min(length, at + 2));
+      const behind = path.getPointAtLength(Math.max(0, at - 2));
+      const angle = Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * 180 / Math.PI;
+      car.current?.setAttribute("transform", `translate(${point.x.toFixed(1)} ${point.y.toFixed(1)}) rotate(${angle.toFixed(1)})`);
+      marks.forEach((mark, i) => {
+        const on = progress >= mark - 0.005;
+        stops.current[i]?.classList.toggle("on", on);
+        pins.current[i]?.classList.toggle("on", on);
+      });
+    };
     if (reducedMotion()) { place(1); return; }
     place(0);
-    const trigger = ScrollTrigger.create({ trigger: section.current, start: "top 65%", end: "bottom 70%", scrub: 0.6,
+    const trigger = ScrollTrigger.create({ trigger: section.current, start: "top 80%", end: "bottom 25%", scrub: 0.6,
       onUpdate: self => place(self.progress) });
-    return () => trigger.kill();
+    let flow = 0;
+    const stopFlow = onDrive(dt => {
+      flow = (flow - (drive.kmh / MAX_KMH) * 240 * dt) % 40;  // one dash cycle is 40 units
+      if (lane.current) lane.current.style.strokeDashoffset = flow.toFixed(1);
+    });
+    return () => { trigger.kill(); stopFlow(); };
   }, []);
+  const d = "M20 200 C 220 200, 260 60, 460 60 S 700 200, 900 190 S 1120 70, 1180 70";
   return (
     <section className="lab-how" ref={section} data-chapter="Junction 3 · How it works">
       <h2>How a rental <em>drives</em></h2>
       <div className="lab-how-road">
-        <svg viewBox="0 0 1200 260" preserveAspectRatio="none" aria-hidden="true">
-          <path className="lab-how-asphalt" d="M20 200 C 220 200, 260 60, 460 60 S 700 200, 900 190 S 1120 70, 1180 70" />
-          <path className="lab-how-ghost" d="M20 200 C 220 200, 260 60, 460 60 S 700 200, 900 190 S 1120 70, 1180 70" />
-          <path ref={road} className="lab-how-lane" d="M20 200 C 220 200, 260 60, 460 60 S 700 200, 900 190 S 1120 70, 1180 70" />
-          <g ref={car}><rect x="-14" y="-8" width="28" height="16" rx="4" className="lab-how-car" /></g>
+        <svg viewBox="0 0 1200 260" aria-hidden="true">
+          <defs>
+            <mask id="lab-how-reveal" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="260">
+              <path ref={reveal} d={d} fill="none" stroke="#fff" strokeWidth="20" />
+            </mask>
+          </defs>
+          <path ref={road} className="lab-how-asphalt" d={d} />
+          <path className="lab-how-ghost" d={d} />
+          <path ref={lane} className="lab-how-lane" d={d} mask="url(#lab-how-reveal)" />
+          {[0, 1, 2, 3].map(i => (
+            <g key={i} ref={el => { pins.current[i] = el; }} className={`lab-how-pin${i === 3 ? " finish" : ""}`}>
+              <circle r="13" /><circle r="5" className="core" />
+            </g>
+          ))}
+          <g ref={car} className="lab-how-vehicle">
+            <rect x="-17" y="-9" width="34" height="18" rx="6" className="body" />
+            <rect x="2" y="-7" width="9" height="14" rx="2" className="glass" />
+            <rect x="-13" y="-7" width="6" height="14" rx="2" className="glass" />
+          </g>
         </svg>
         <ol className="lab-how-stops">
           {HOW.map((stop, i) => (
