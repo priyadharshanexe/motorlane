@@ -18,12 +18,12 @@ from django.contrib import admin
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerSplitView
 
 from rental.health import healthz, readyz
+from rental.media import serve_media
 from django.urls import path, include, re_path
 from rental.views import react_app
 from django.views.generic import RedirectView
 from django.templatetags.static import static as static_url
 from django.conf import settings
-from django.conf.urls.static import static
 
 urlpatterns = [
     path("favicon.ico", RedirectView.as_view(url=static_url("rental/favicon.ico")), name="favicon"),
@@ -39,4 +39,6 @@ urlpatterns = [
     path('', include('rental.urls')),
 ]
 
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Without a front proxy (local Docker, development) Django serves uploads itself, with cache
+# headers; the view answers 404 unless SERVE_MEDIA is on.
+urlpatterns += [re_path(r"^media/(?P<path>.*)$", serve_media, name="media")]

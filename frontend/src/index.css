@@ -331,6 +331,7 @@ textarea {
 }
 .photo {
   width: 100%;
+  height: auto;
   aspect-ratio: 1.6;
   object-fit: cover;
   display: block;

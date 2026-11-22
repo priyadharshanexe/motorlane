@@ -18,6 +18,7 @@ export interface Vehicle {
   location: string | null
   price_per_day: string
   vehicle_image: string | null
+  cover?: { small: string; large: string; width: number | null; height: number | null; color: string | null } | null
 }
 export interface DateRange { start_date: string; end_date: string }
 export interface Review { id: number; rating: number; comment: string }

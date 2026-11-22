@@ -3,9 +3,12 @@
 	encode zstd gzip
 
 	# Uploaded vehicle photos are served straight from the shared media volume.
+	# Thumbnails have content-hashed names, so they can be cached forever; originals for a day.
+	@thumbnails path /media/vehicles/thumbs/*
+	header @thumbnails Cache-Control "public, max-age=31536000, immutable"
 	handle_path /media/* {
 		root * /srv/media
-		header Cache-Control "public, max-age=604800"
+		header ?Cache-Control "public, max-age=86400"
 		file_server
 	}
 

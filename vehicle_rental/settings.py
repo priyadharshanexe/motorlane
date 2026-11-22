@@ -160,6 +160,8 @@ STATICFILES_DIRS = [("react", FRONTEND_BUILD)] if FRONTEND_BUILD.is_dir() else [
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MEDIA_URL = '/media/'
+# Serve uploads from Django when no proxy does (debug, local Docker). Production uses Caddy.
+SERVE_MEDIA = DEBUG or os.getenv("DJANGO_SERVE_MEDIA") == "1"
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",

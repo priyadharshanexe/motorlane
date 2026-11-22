@@ -27,18 +27,32 @@ class PhotoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VehiclePhoto
-        fields = ("id", "url", "small", "large", "order", "is_cover")
+        fields = ("id", "url", "small", "large", "width", "height", "color", "order", "is_cover")
 
 
 class VehicleSerializer(serializers.ModelSerializer):
     rating = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
     vehicle_image = serializers.SerializerMethodField(help_text="The cover photo (large WebP thumbnail).")
+    cover = serializers.SerializerMethodField(
+        help_text="Cover photo renditions for responsive images: small (400 px) for cards, large (1200 px) "
+                  "for detail pages, the upright size for layout, and an average colour placeholder.")
     photos = PhotoSerializer(many=True, read_only=True)
 
     def get_vehicle_image(self, vehicle) -> str | None:
         cover = vehicle.cover_photo
         return file_url(self.context.get("request"), cover.thumb_large or cover.image) if cover else None
+
+    def get_cover(self, vehicle) -> dict | None:
+        cover = vehicle.cover_photo
+        if cover is None:
+            return None
+        request = self.context.get("request")
+        return {
+            "small": file_url(request, cover.thumb_small or cover.image),
+            "large": file_url(request, cover.thumb_large or cover.image),
+            "width": cover.width, "height": cover.height, "color": cover.color or None,
+        }
 
     def get_rating(self, vehicle) -> float | None:
         return self._reviews(vehicle)["average"]
@@ -59,7 +73,7 @@ class VehicleSerializer(serializers.ModelSerializer):
         fields = ("id", "name", "vehicle_type", "fuel_type", "location", "price_per_day", "weekend_price_per_day",
                   "deposit", "vehicle_image",
                   "description", "transmission", "seats", "model_year", "pickup_instructions", "rating",
-                  "review_count", "photos")
+                  "review_count", "cover", "photos")
 
 
 class FleetVehicleSerializer(VehicleSerializer):

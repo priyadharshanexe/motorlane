@@ -4,6 +4,7 @@ Thumbnails are generated synchronously on upload (two widths, aspect ratio kept,
 upscaled). Callers that change a vehicle's photos hold the vehicle's row lock so the
 "one cover" rule cannot be broken by concurrent requests (MySQL has no partial unique index).
 """
+import hashlib
 from io import BytesIO
 from pathlib import Path
 
@@ -16,10 +17,11 @@ from ..models import Vehicle, VehiclePhoto
 
 MAX_PHOTOS = 8
 THUMBNAIL_WIDTHS = {"thumb_small": 400, "thumb_large": 1200}
-WEBP_QUALITY = 80
+# Card thumbnails are small on screen, so they take a lower quality to stay well under 60 KB.
+WEBP_QUALITY = {400: 72, 1200: 80}
 
 
-def render_webp(source, width):
+def render_webp(source, width, quality=None):
     """WebP bytes of `source` (a file-like object) scaled down to at most `width` pixels wide."""
     with Image.open(source) as image:
         image = ImageOps.exif_transpose(image)
@@ -27,20 +29,35 @@ def render_webp(source, width):
         if image.width > width:
             image = image.resize((width, round(image.height * width / image.width)), Image.LANCZOS)
         out = BytesIO()
-        image.save(out, format="WEBP", quality=WEBP_QUALITY, method=6)
+        image.save(out, format="WEBP", quality=quality or WEBP_QUALITY.get(width, 80), method=6)
         return out.getvalue()
 
 
+def image_facts(source):
+    """(width, height, dominant colour as #rrggbb) of the upright image, for layout and placeholders."""
+    with Image.open(source) as image:
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        r, g, b = image.resize((1, 1), Image.BOX).getpixel((0, 0))
+        return image.width, image.height, f"#{r:02x}{g:02x}{b:02x}"
+
+
 def make_thumbnails(photo):
+    """Write the WebP renditions. Names carry a content hash, so browsers may cache them forever."""
     stem = Path(photo.image.name).stem
+    photo.image.open("rb")
+    try:
+        original = photo.image.read()
+    finally:
+        photo.image.close()
+    photo.width, photo.height, photo.color = image_facts(BytesIO(original))
     for field, width in THUMBNAIL_WIDTHS.items():
-        photo.image.open("rb")
-        try:
-            data = render_webp(photo.image, width)
-        finally:
-            photo.image.close()
-        getattr(photo, field).save(f"{stem}-{width}.webp", ContentFile(data), save=False)
-    photo.save(update_fields=list(THUMBNAIL_WIDTHS))
+        data = render_webp(BytesIO(original), width)
+        digest = hashlib.sha256(data).hexdigest()[:10]
+        old = getattr(photo, field)
+        if old and old.name:
+            old.storage.delete(old.name)
+        old.save(f"{stem}-{width}-{digest}.webp", ContentFile(data), save=False)
+    photo.save(update_fields=[*THUMBNAIL_WIDTHS, "width", "height", "color"])
 
 
 def validate_upload(image):

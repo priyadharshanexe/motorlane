@@ -226,9 +226,12 @@ export function Home() {
 export function Listing({
   vehicle,
   params = "",
+  priority = false,
 }: {
   vehicle: Vehicle;
   params?: string;
+  /** The first row of a grid is above the fold: load it eagerly and first. */
+  priority?: boolean;
 }) {
   const [preview, setPreview] = useState(false);
   const url = `/vehicles/${vehicle.id}${params ? "?" + params : ""}`;
@@ -239,7 +242,7 @@ export function Listing({
     >
       <div className="ride-media">
         <Link to={url} aria-label={`View ${vehicle.name}`}>
-          <Photo vehicle={vehicle} />
+          <Photo vehicle={vehicle} priority={priority} />
         </Link>
         <span className="ride-type">{vehicle.vehicle_type}</span>
         <FavoriteButton vehicle={vehicle} />
@@ -324,11 +327,12 @@ export function Catalog() {
           {query.isPending && <Busy />}
           <Notice error={query.error} />
           <div className="cards">
-            {query.data?.results.map((vehicle) => (
+            {query.data?.results.map((vehicle, index) => (
               <Listing
                 key={vehicle.id}
                 vehicle={vehicle}
                 params={params.toString()}
+                priority={index < 3}
               />
             ))}
           </div>
@@ -419,7 +423,7 @@ function VehicleReservation({
             </p>
           </div>
           <div className="detail-photo">
-            <Photo vehicle={v} />
+            <Photo vehicle={v} size="large" priority />
             <FavoriteButton vehicle={v} />
           </div>
           <div className="detail-rating">
