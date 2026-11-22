@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Booking, Payment, Refund, Vehicle, WebhookEvent
+from .models import Booking, Payment, RefundIntent as Refund, Vehicle, WebhookEvent
 from .payments.providers import FakeProvider, RazorpayTestProvider, get_provider, sign
 from .services.booking import reserve_vehicle
 from .testing import make_profile
@@ -117,15 +117,25 @@ class PaymentFlowTests(TestCase):
         self.assertEqual((payment.refunded_amount, payment.status), (Decimal("2000.00"), "partially_refunded"))
         self.assertEqual(list(Refund.objects.values_list("reason", flat=True)), ["deposit"])
 
-    def test_refund_failure_keeps_the_booking_unchanged(self):
+    def test_provider_outage_does_not_block_cancellation_and_the_refund_is_retried(self):
         from .payments.providers import PaymentError
+        from .payments.service import process_due_refunds
         booking = self.book()
         self.checkout(booking)
-        with patch.object(FakeProvider, "refund", side_effect=PaymentError("down")):
-            self.assertEqual(self.act(booking, "cancel", self.renter).status_code, 409)
+        with patch.object(FakeProvider, "refund", side_effect=PaymentError("down")) as refund_call, \
+                self.assertLogs("rental.payments.service", "WARNING"), self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(self.act(booking, "cancel", self.renter).status_code, 200)
+        self.assertEqual(refund_call.call_count, 1)
         booking.refresh_from_db()
-        self.assertEqual(booking.status, Booking.Status.CONFIRMED)
-        self.assertEqual(Payment.objects.get().status, "paid")
+        self.assertEqual(booking.status, Booking.Status.CANCELLED)
+        intent = Refund.objects.get()
+        self.assertEqual((intent.status, intent.attempts, intent.last_error), ("pending", 1, "down"))
+        self.assertEqual(process_due_refunds(), [])  # still inside the backoff window
+        later = timezone.now() + timedelta(minutes=2)
+        self.assertEqual(len(process_due_refunds(now=later)), 1)
+        intent.refresh_from_db()
+        self.assertEqual((intent.status, intent.attempts), ("succeeded", 2))
+        self.assertTrue(intent.provider_refund_id.startswith("fake_rfnd_"))
 
 
 @override_settings(PAYMENT_PROVIDER="fake", DEMO_MODE=True, PAYMENT_WEBHOOK_SECRET=WEBHOOK_SECRET, RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
@@ -168,10 +178,11 @@ class WebhookTests(TestCase):
         self.assertEqual(self.deliver("evt_3", "payment.failed").json(), {"result": "processed"})
         self.payment.refresh_from_db()
         self.assertEqual(self.payment.status, "failed")
-        refund = Refund.objects.create(payment=self.payment, provider_refund_id="fake_rfnd_1", amount=100, reason="deposit")
+        refund = Refund.objects.create(payment=self.payment, provider_refund_id="fake_rfnd_1", amount=100, reason="deposit",
+                                       idempotency_key="k1", status="sent")
         self.deliver("evt_4", "refund.processed", "refund", {"id": "fake_rfnd_1", "payment_id": "fake_pay_1"})
         refund.refresh_from_db()
-        self.assertTrue(refund.processed)
+        self.assertEqual(refund.status, "succeeded")
         self.assertEqual(self.deliver("evt_5", "something.else").json(), {"result": "ignored"})
 
     def test_webhook_needs_no_session_or_csrf(self):
@@ -284,3 +295,98 @@ class RazorpayCheckoutTests(TestCase):
         self.assertEqual(self.client.post(reverse("api_payment_confirm", args=[self.booking.pk]), forged,
                                           secure=True).status_code, 400)
         self.assertEqual(Payment.objects.get().status, "created")
+
+
+@override_settings(PAYMENT_PROVIDER="fake", DEMO_MODE=True)
+class RefundIntentTests(TestCase):
+    """Refunds are recorded in the booking transaction and sent to the provider only after commit."""
+
+    def setUp(self):
+        renter = make_profile("intent-renter")
+        vehicle = Vehicle.objects.create(name="Car", vehicle_type="Car", price_per_day=1000)
+        day = timezone.localdate() + timedelta(days=8)
+        self.booking = reserve_vehicle(renter.pk, vehicle.pk, day, day)
+        self.payment = Payment.objects.create(booking=self.booking, provider="fake", order_id="o1", amount=1000,
+                                              status="paid", payment_id="p1")
+
+    def issue(self):
+        from django.db import transaction
+
+        from .payments.service import issue_refund
+        with transaction.atomic():
+            return issue_refund(self.payment, 400, "cancellation")
+
+    def test_rollback_leaves_no_intent_and_calls_no_provider(self):
+        from django.db import transaction
+
+        from .payments.service import issue_refund
+        with patch.object(FakeProvider, "refund") as refund_call, self.captureOnCommitCallbacks(execute=True):
+            try:
+                with transaction.atomic():
+                    issue_refund(self.payment, 400, "cancellation")
+                    raise RuntimeError("the booking change failed")
+            except RuntimeError:
+                pass
+        refund_call.assert_not_called()
+        self.assertFalse(Refund.objects.exists())
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.refunded_amount, 0)
+
+    def test_after_commit_the_provider_gets_the_stable_idempotency_key(self):
+        with patch.object(FakeProvider, "refund", return_value=("rf_1", "pending")) as refund_call, \
+                self.captureOnCommitCallbacks(execute=True):
+            intent = self.issue()
+        self.assertEqual(refund_call.call_args.args[2], f"motorlane-refund-{self.payment.pk}-cancellation")
+        intent.refresh_from_db()
+        self.assertEqual((intent.status, intent.provider_refund_id), ("sent", "rf_1"))
+
+    def test_the_same_refund_cannot_be_recorded_twice(self):
+        from django.db import IntegrityError, transaction
+        self.issue()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.issue()
+
+    def test_crash_after_the_provider_accepted_does_not_refund_twice(self):
+        """The provider refunded, then the process died before saving. The retry finds the refund instead."""
+        from .payments.service import process_due_refunds
+        intent = self.issue()
+        Refund.objects.filter(pk=intent.pk).update(attempts=1)  # an attempt was claimed, its outcome never saved
+        with patch.object(FakeProvider, "find_refund", return_value=("rf_existing", "processed")), \
+                patch.object(FakeProvider, "refund") as refund_call:
+            process_due_refunds()
+        refund_call.assert_not_called()
+        intent.refresh_from_db()
+        self.assertEqual((intent.status, intent.provider_refund_id), ("succeeded", "rf_existing"))
+
+    def test_repeated_processing_sends_once(self):
+        from .payments.service import process_refund
+        intent = self.issue()
+        with patch.object(FakeProvider, "refund", return_value=("rf_1", "processed")) as refund_call:
+            process_refund(intent.pk)
+            process_refund(intent.pk)
+        self.assertEqual(refund_call.call_count, 1)
+
+    def test_gives_up_after_the_last_attempt(self):
+        from .payments.providers import PaymentError
+        from .payments.service import MAX_REFUND_ATTEMPTS, process_refund
+        intent = self.issue()
+        Refund.objects.filter(pk=intent.pk).update(attempts=MAX_REFUND_ATTEMPTS - 1)
+        with patch.object(FakeProvider, "refund", side_effect=PaymentError("refused")), \
+                patch.object(FakeProvider, "find_refund", return_value=None), \
+                self.assertLogs("rental.payments.service", "ERROR"):
+            process_refund(intent.pk)
+        intent.refresh_from_db()
+        self.assertEqual(intent.status, "failed")
+
+    def test_reconcile_updates_sent_refunds(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+        sent = self.issue()
+        Refund.objects.filter(pk=sent.pk).update(status="sent", provider_refund_id="rf_sent", attempts=1)
+        out = StringIO()
+        with patch.object(FakeProvider, "refund_status", return_value="processed"):
+            call_command("reconcile_refunds", stdout=out)
+        sent.refresh_from_db()
+        self.assertEqual(sent.status, "succeeded")
+        self.assertIn("succeeded 1", out.getvalue())

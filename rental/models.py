@@ -284,13 +284,72 @@ class Payment(models.Model):
         return self.status in (self.Status.PAID, self.Status.PARTIALLY_REFUNDED, self.Status.REFUNDED)
 
 
-class Refund(models.Model):
+class RefundIntent(models.Model):
+    """A refund the business owes, recorded in the same transaction as the decision to refund.
+
+    The provider is only called after that transaction commits, always with
+    `idempotency_key`, so a rollback can never leave an unrecorded refund at the provider
+    and a retry can never refund twice. Statuses: pending (not yet accepted by the
+    provider, retried with backoff), sent (accepted, waiting for confirmation),
+    succeeded (confirmed), failed (gave up after MAX attempts; needs a person).
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending"
+        SENT = "sent"
+        SUCCEEDED = "succeeded"
+        FAILED = "failed"
+
     payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="refunds")
-    provider_refund_id = models.CharField(max_length=64, unique=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     reason = models.CharField(max_length=40)
-    processed = models.BooleanField(default=False, help_text="Set when the provider confirms it by webhook.")
+    idempotency_key = models.CharField(max_length=80, unique=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(default=timezone.now)
+    provider_refund_id = models.CharField(max_length=64, null=True, blank=True, unique=True)
+    last_error = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["status", "next_attempt_at"], name="refund_due")]
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name="refund_amount_positive")]
+
+    @property
+    def booking(self):
+        return self.payment.booking
+
+
+class NotificationOutbox(models.Model):
+    """Emails rendered inside the business transaction and delivered (with retries) after it.
+
+    `dedupe_key` makes enqueueing idempotent, e.g. one pickup reminder per booking.
+    Delivery is at-least-once: a crash between the mail server accepting a message and
+    the row being marked sent can resend it, which is preferable to losing it.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending"
+        SENT = "sent"
+        FAILED = "failed"
+
+    kind = models.CharField(max_length=40)
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, null=True, blank=True, related_name="notifications")
+    dedupe_key = models.CharField(max_length=120, unique=True)
+    to = models.EmailField()
+    subject = models.CharField(max_length=200)
+    body_text = models.TextField()
+    body_html = models.TextField(blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(default=timezone.now)
+    last_error = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["status", "next_attempt_at"], name="outbox_due")]
 
 
 class WebhookEvent(models.Model):

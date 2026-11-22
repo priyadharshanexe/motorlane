@@ -44,7 +44,16 @@ class Provider:
     def create_order(self, payment):  # -> order id
         raise NotImplementedError
 
-    def refund(self, payment, amount):  # -> provider refund id
+    def refund(self, payment, amount, idempotency_key):
+        """Ask for a refund. Returns (provider refund id, provider status). Must be idempotent per key."""
+        raise NotImplementedError
+
+    def find_refund(self, payment, idempotency_key):
+        """(id, status) of a refund already made with this key, or None. Used after a crash or timeout."""
+        raise NotImplementedError
+
+    def refund_status(self, refund_id):
+        """Current provider status of a refund: 'processed', 'pending' or 'failed'."""
         raise NotImplementedError
 
     def verify_checkout(self, order_id, payment_id, signature):
@@ -66,8 +75,15 @@ class FakeProvider(Provider):
     def create_order(self, payment):
         return f"fake_order_{secrets.token_hex(8)}"
 
-    def refund(self, payment, amount):
-        return f"fake_rfnd_{secrets.token_hex(8)}"
+    def refund(self, payment, amount, idempotency_key):
+        # Deterministic per key, so repeating a request is harmless, as with a real idempotent API.
+        return f"fake_rfnd_{hashlib.sha256(idempotency_key.encode()).hexdigest()[:16]}", "processed"
+
+    def find_refund(self, payment, idempotency_key):
+        return None  # the fake keeps no state; refund() itself is idempotent
+
+    def refund_status(self, refund_id):
+        return "processed"
 
     def simulate_checkout(self, payment):
         """What the checkout widget would return after the renter pays (fake mode only)."""
@@ -98,8 +114,30 @@ class RazorpayTestProvider(Provider):
         return self._post("/orders", {"amount": to_paise(payment.amount), "currency": payment.currency,
                                       "receipt": f"booking-{payment.booking_id}"})["id"]
 
-    def refund(self, payment, amount):
-        return self._post(f"/payments/{payment.payment_id}/refund", {"amount": to_paise(amount)})["id"]
+    def _get(self, path):
+        import requests
+        try:
+            response = requests.get(f"{self.api}{path}", auth=(self.key_id, self.key_secret), timeout=10)
+        except requests.RequestException as error:
+            raise PaymentError("The payment provider could not be reached.") from error
+        if response.status_code >= 400:
+            raise PaymentError("The payment provider refused the request.")
+        return response.json()
+
+    def refund(self, payment, amount, idempotency_key):
+        # The key travels as the refund receipt so find_refund can recognise it after a crash.
+        data = self._post(f"/payments/{payment.payment_id}/refund", {
+            "amount": to_paise(amount), "receipt": idempotency_key, "notes": {"idempotency_key": idempotency_key}})
+        return data["id"], data.get("status", "pending")
+
+    def find_refund(self, payment, idempotency_key):
+        for item in self._get(f"/payments/{payment.payment_id}/refunds").get("items", []):
+            if item.get("receipt") == idempotency_key:
+                return item["id"], item.get("status", "pending")
+        return None
+
+    def refund_status(self, refund_id):
+        return self._get(f"/refunds/{refund_id}").get("status", "pending")
 
 
 def derived_secret(purpose):
