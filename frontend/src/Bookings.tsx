@@ -8,6 +8,8 @@ import { api, dateLabel } from "./api";
 import type { Booking } from "./api";
 import { Busy, Notice, Photo, Status } from "./shared";
 import { formData, useWrite } from "./requests";
+import { razorpayCheckout } from "./payments";
+import type { CheckoutOptions, CheckoutResult, PaymentConfig } from "./payments";
 
 const customerQueues: Record<string, Booking["status"][]> = {
   All: [],
@@ -42,6 +44,13 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
     queryFn: () => api<Booking[]>(owner ? "owner/bookings/" : "bookings/"),
   });
   const write = useWrite();
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const paymentConfig = useQuery({
+    queryKey: ["payment-config"],
+    queryFn: () => api<PaymentConfig>("payments/config/"),
+    enabled: !owner,
+    staleTime: Infinity,
+  });
   const queues = owner ? ownerQueues : customerQueues;
   const statuses =
     Object.entries(queues).find(([label]) => label === queue)?.[1] ?? [];
@@ -222,17 +231,27 @@ export function Bookings({ owner = false }: { owner?: boolean }) {
                   <a href={`/download-receipt/${row.id}/`}>Booking summary</a>
                   {row.status === "Confirmed" && row.payment_required &&
                     !["paid", "partially_refunded", "refunded"].includes(row.payment?.status ?? "") && (
-                    <button
-                      disabled={write.isPending}
-                      onClick={async () => {
-                        // Test-mode checkout: the built-in fake provider stands in for the payment widget.
-                        await write.mutateAsync({ path: `bookings/${row.id}/payment/` });
-                        const result = await write.mutateAsync({ path: `bookings/${row.id}/payment/fake-checkout/` });
-                        write.mutate({ path: `bookings/${row.id}/payment/confirm/`, body: result as Record<string, unknown> });
-                      }}
-                    >
-                      Pay now (test mode)
-                    </button>
+                    <span className="payment-action">
+                      <button
+                        disabled={write.isPending || !paymentConfig.data}
+                        onClick={async () => {
+                          setPaymentError(null);
+                          try {
+                            const options = await write.mutateAsync({ path: `bookings/${row.id}/payment/` }) as CheckoutOptions;
+                            const result = paymentConfig.data?.provider === "razorpay"
+                              ? await razorpayCheckout(options, `${row.vehicle.name} rental #${row.id}`)
+                              : await write.mutateAsync({ path: `bookings/${row.id}/payment/fake-checkout/` }) as CheckoutResult;
+                            await write.mutateAsync({ path: `bookings/${row.id}/payment/confirm/`, body: { ...result } });
+                          } catch (error) {
+                            setPaymentError(error instanceof Error ? error.message : "Payment failed.");
+                          }
+                        }}
+                      >
+                        Pay now
+                      </button>
+                      {paymentConfig.data && <small className="payment-mode">{paymentConfig.data.label}</small>}
+                      {paymentError && <small className="payment-error" role="alert">{paymentError}</small>}
+                    </span>
                   )}
                   {(row.status === "Pending" ||
                     (row.status === "Confirmed" && row.start_date > today)) && (

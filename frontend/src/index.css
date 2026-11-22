@@ -2667,3 +2667,7 @@ main {
 .review-rating p { min-height:22px; margin:8px 0 0; font-size:.85rem; color:var(--muted); }
 
 .daily-price { gap: 0; }
+
+.payment-action { display: inline-flex; flex-direction: column; gap: 4px; }
+.payment-mode { color: #5b6472; font-size: 12px; }
+.payment-error { color: #b42318; font-size: 12px; }
