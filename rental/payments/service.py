@@ -8,6 +8,13 @@
 * The deposit is refunded when the owner records the return.
 * Refunds are durable intents: recorded with the booking change, sent to the provider after
   commit with a stable idempotency key, retried with backoff, and reconciled by the scheduler.
+
+Lock order. Every path that locks more than one of these rows takes them in this order:
+vehicle -> booking -> payment -> refund intent. Booking transitions lock the vehicle, then the
+booking, then (for refunds) the payment; checkout locks the booking, then the payment; the
+webhook resolves the booking from the order without locking, then locks booking, then payment.
+Taking them in one global order means two of these paths can wait for each other but never
+deadlock (MySQL error 1213).
 * Webhooks are verified by signature and recorded by provider event id, so a redelivered
   event is acknowledged without being applied twice.
 """
@@ -250,10 +257,24 @@ def handle_webhook(body, signature, event_id):
     return "processed" if applied else "ignored"
 
 
+def lock_payment_by_order(order_id):
+    """Lock the booking, then the payment, for a provider order (the global lock order).
+
+    The booking id is read without a lock first; locking the payment first would invert the
+    order that booking transitions use and could deadlock against a concurrent cancellation.
+    """
+    row = Payment.objects.filter(order_id=order_id).values_list("pk", "booking_id").first()
+    if row is None or not order_id:
+        return None
+    payment_id, booking_id = row
+    Booking.objects.select_for_update().get(pk=booking_id)
+    return Payment.objects.select_for_update().get(pk=payment_id)
+
+
 def apply_event(event_type, data):
     if event_type in ("payment.captured", "order.paid"):
         entity = data.get("payment", {}).get("entity", {})
-        payment = Payment.objects.select_for_update().filter(order_id=entity.get("order_id", "")).first()
+        payment = lock_payment_by_order(entity.get("order_id", ""))
         if payment:
             mark_paid(payment, entity.get("id", ""))
             return True
