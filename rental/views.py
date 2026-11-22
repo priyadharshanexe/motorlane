@@ -6,7 +6,7 @@ from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .models import Booking
+from .models import Booking, NotificationOutbox, RefundIntent
 from .selectors import active_bookings
 from .services.profiles import rental_profile
 
@@ -18,7 +18,13 @@ def admin_dashboard(request):
         "overdue_count": Booking.objects.filter(
             status=Booking.Status.IN_PROGRESS, end_date__lt=timezone.localdate(),
         ).count(),
-        "recent_bookings": Booking.objects.select_related("user", "vehicle").order_by("-pk")[:15],
+        "recent_bookings": Booking.objects.select_related("user__user", "vehicle").order_by("-pk")[:15],
+        "failed_refunds": RefundIntent.objects.filter(status=RefundIntent.Status.FAILED)
+        .select_related("payment").order_by("-updated_at")[:20],
+        "failed_emails": NotificationOutbox.objects.filter(status=NotificationOutbox.Status.FAILED)
+        .order_by("-next_attempt_at")[:20],
+        "failed_refund_count": RefundIntent.objects.filter(status=RefundIntent.Status.FAILED).count(),
+        "failed_email_count": NotificationOutbox.objects.filter(status=NotificationOutbox.Status.FAILED).count(),
     })
 
 

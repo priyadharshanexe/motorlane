@@ -3,6 +3,23 @@
 <h1>Rental operations</h1>
 <p>{{ pending_count }} pending request{{ pending_count|pluralize }} · {{ overdue_count }} overdue return{{ overdue_count|pluralize }}</p>
 <p><a href="{% url 'admin:index' %}">Manage records in Django Admin</a></p>
+<h2>Needs attention</h2>
+<p>{{ failed_refund_count }} failed refund{{ failed_refund_count|pluralize }} ·
+{{ failed_email_count }} failed email{{ failed_email_count|pluralize }}.
+They stopped retrying automatically. Fix the cause, then retry them from Django Admin
+(<a href="{% url 'admin:rental_refundintent_changelist' %}?status__exact=failed">refunds</a>,
+<a href="{% url 'admin:rental_notificationoutbox_changelist' %}?status__exact=failed">emails</a>)
+or with <code>manage.py reconcile_refunds --retry-failed</code> and <code>manage.py send_notifications --retry-failed</code>.</p>
+{% if failed_refunds %}<div class="table-responsive"><table class="table" aria-label="Failed refunds">
+<thead><tr><th>Booking</th><th>Amount</th><th>Reason</th><th>Attempts</th><th>Last error</th></tr></thead>
+<tbody>{% for intent in failed_refunds %}<tr><td>#{{ intent.payment.booking_id }}</td><td>₹{{ intent.amount }}</td>
+<td>{{ intent.reason }}</td><td>{{ intent.attempts }}</td><td>{{ intent.last_error }}</td></tr>{% endfor %}</tbody>
+</table></div>{% endif %}
+{% if failed_emails %}<div class="table-responsive"><table class="table" aria-label="Failed emails">
+<thead><tr><th>Booking</th><th>Email</th><th>Attempts</th><th>Last error</th></tr></thead>
+<tbody>{% for message in failed_emails %}<tr><td>#{{ message.booking_id }}</td><td>{{ message.subject }}</td>
+<td>{{ message.attempts }}</td><td>{{ message.last_error }}</td></tr>{% endfor %}</tbody>
+</table></div>{% endif %}
 <h2>Recent bookings</h2>
 <div class="table-responsive"><table class="table">
 <thead><tr><th>Vehicle</th><th>Renter</th><th>Dates</th><th>Status</th></tr></thead>

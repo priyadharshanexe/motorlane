@@ -142,6 +142,9 @@ def process_refund(intent_id, now=None):
             updated_at=timezone.now())
         log = logger.error if give_up else logger.warning
         log("refund_attempt_failed intent_id=%s attempt=%s give_up=%s", intent.pk, intent.attempts, give_up)
+        if give_up:
+            logger.error("refund_gave_up intent_id=%s booking_id=%s amount=%s: needs attention",
+                         intent.pk, intent.payment.booking_id, intent.amount)
         return None
     status = PROVIDER_STATUS.get(provider_status, RefundIntent.Status.SENT)
     RefundIntent.objects.filter(pk=intent.pk).update(provider_refund_id=refund_id, status=status, last_error="",
@@ -244,3 +247,17 @@ def apply_event(event_type, data):
         return bool(RefundIntent.objects.filter(provider_refund_id=entity.get("id", "")).update(
             status=RefundIntent.Status.SUCCEEDED))
     return False
+
+
+def retry_failed_refunds(ids=None):
+    """Give failed refund intents a fresh set of attempts (after a person fixed the cause).
+
+    The idempotency key is unchanged, so a refund the provider did make is found, not repeated.
+    """
+    failed = RefundIntent.objects.filter(status=RefundIntent.Status.FAILED)
+    if ids is not None:
+        failed = failed.filter(pk__in=ids)
+    count = failed.update(status=RefundIntent.Status.PENDING, attempts=1, next_attempt_at=timezone.now(),
+                          updated_at=timezone.now())
+    logger.warning("refunds_requeued count=%s", count)
+    return count

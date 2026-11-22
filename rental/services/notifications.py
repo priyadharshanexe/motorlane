@@ -93,6 +93,9 @@ def deliver(message_id, now=None):
             message.save(update_fields=["status", "attempts", "next_attempt_at", "last_error"])
             logger.exception("notification_failed kind=%s booking_id=%s attempt=%s give_up=%s",
                              message.kind, message.booking_id, message.attempts, give_up)
+            if give_up:
+                logger.error("notification_gave_up outbox_id=%s kind=%s booking_id=%s: needs attention",
+                             message.pk, message.kind, message.booking_id)
             return False
         message.status, message.sent_at, message.last_error = NotificationOutbox.Status.SENT, now, ""
         message.save(update_fields=["status", "attempts", "sent_at", "last_error"])
@@ -109,3 +112,15 @@ def deliver_due(now=None):
     now = now or timezone.now()
     due = NotificationOutbox.objects.filter(status=NotificationOutbox.Status.PENDING, next_attempt_at__lte=now)
     return sum(deliver(pk, now) for pk in due.order_by("next_attempt_at", "pk").values_list("pk", flat=True))
+
+
+def retry_failed(ids=None):
+    """Put permanently failed emails back in the queue with a fresh set of attempts."""
+    from ..models import NotificationOutbox
+
+    failed = NotificationOutbox.objects.filter(status=NotificationOutbox.Status.FAILED)
+    if ids is not None:
+        failed = failed.filter(pk__in=ids)
+    count = failed.update(status=NotificationOutbox.Status.PENDING, attempts=0, next_attempt_at=timezone.now())
+    logger.warning("notifications_requeued count=%s", count)
+    return count
