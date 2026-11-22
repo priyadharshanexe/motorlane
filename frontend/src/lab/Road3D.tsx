@@ -19,12 +19,12 @@ const zOf = (i: number, spacing: number, period: number, travel: number) =>
 
 type Palette = ReturnType<typeof palette>;
 const palette = (light: boolean) => light ? {
-  skyTop: "#8FCBE6", skyLow: "#F7E8C9", road: "#76726C", shoulder: "#D9CFBC", edge: "#FFFFFF", lane: "#FFC531", post: "#F2EEE4",
+  skyTop: "#5FAEDF", skyMid: "#A8D5EC", skyLow: "#F7E8C9", road: "#76726C", shoulder: "#D9CFBC", edge: "#FFFFFF", lane: "#FFC531", post: "#F2EEE4",
   eye: "#D9761A", field: "#8BBE4B", paddy: "#6EA637", trunk: "#8A6440", leaf: "#3E9140", leaf2: "#6DB548", tree: "#4C9B3C",
   hill: "#7FA69A", hill2: "#A3C2BC", gopuram: "#C9A577", rail: "#D5D8DC", lamp: "#D8D4CB", pool: "#000000",
   shadow: 0.32, poolOpacity: 0, moon: false, haze: "#F7E8C9",
 } : {
-  skyTop: "#0E1013", skyLow: "#2A251D", road: "#1C1F23", shoulder: "#23262A", edge: "#D8D4CB", lane: "#FFC531", post: "#3A3F46",
+  skyTop: "#0E1013", skyMid: "#15171A", skyLow: "#2A251D", road: "#1C1F23", shoulder: "#23262A", edge: "#D8D4CB", lane: "#FFC531", post: "#3A3F46",
   eye: "#FFB020", field: "#141E17", paddy: "#1A2A1F", trunk: "#2E2820", leaf: "#183022", tree: "#15291C",
   hill: "#22231F", hill2: "#2B2A24", gopuram: "#332F27", rail: "#4A4F56", lamp: "#FFE6A8", pool: "#FFC970",
   shadow: 0, poolOpacity: 0.16, moon: true, leaf2: "#1F3A28", haze: "#2A251D",
@@ -50,7 +50,10 @@ function skyTexture(colors: Palette) {
   const canvas = Object.assign(document.createElement("canvas"), { width: 4, height: 128 });
   const g = canvas.getContext("2d")!;
   const gradient = g.createLinearGradient(0, 0, 0, 128);
+  // A clear blue overhead that softens and warms towards the horizon.
   gradient.addColorStop(0, colors.skyTop);
+  gradient.addColorStop(0.55, colors.skyMid);
+  gradient.addColorStop(0.88, colors.skyLow);
   gradient.addColorStop(1, colors.skyLow);
   g.fillStyle = gradient;
   g.fillRect(0, 0, 4, 128);
@@ -157,6 +160,9 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
   const mileGroup = useRef<THREE.Group>(null), ridgeA = useRef<THREE.Group>(null), ridgeB = useRef<THREE.Group>(null);
   const templeMesh = useRef<THREE.Mesh>(null);
   const travel = useRef(0);
+  // r3f aims the default camera at the origin, pitching it ~17 degrees down: the horizon rides high, the road fills
+  // the frame and near dash gaps look huge. Look level down the road instead, with the horizon near mid-frame.
+  useEffect(() => { camera.lookAt(0, 1.0, -40); }, [camera]);
   useEffect(() => {  // palm fronds in two greens, alternating, so crowns read as leaves rather than one flat colour
     const mesh = fronds.current; if (!mesh) return;
     const a = new THREE.Color(colors.leaf), b = new THREE.Color(colors.leaf2);
@@ -278,7 +284,7 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
       {!colors.moon && <mesh position={[-60, 6, -137]}><planeGeometry args={[90, 34]} />
         <meshBasicMaterial color="#FFE9B8" alphaMap={blob} transparent opacity={0.55} blending={THREE.AdditiveBlending} fog={false} depthWrite={false} /></mesh>}
       {/* Sky, moon and horizon skip fog: their colours are already distant. */}
-      <mesh position={[0, 52, -140]}><planeGeometry args={[700, 112]} /><meshBasicMaterial map={sky} fog={false} depthWrite={false} /></mesh>
+      <mesh position={[0, 40, -140]}><planeGeometry args={[700, 90]} /><meshBasicMaterial map={sky} fog={false} depthWrite={false} /></mesh>
       {colors.moon && <mesh position={[38, 26, -138]}><circleGeometry args={[2.6, 32]} /><meshBasicMaterial color="#EFE7D2" fog={false} /></mesh>}
       <group position={[0, -0.5, -132]}>
         <group ref={ridgeA}><mesh geometry={ridgeFar} position={[0, 2, -2]}><meshBasicMaterial color={colors.hill2} fog={false} /></mesh></group>
