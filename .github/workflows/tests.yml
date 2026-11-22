@@ -67,6 +67,11 @@ jobs:
           curl -fsS http://127.0.0.1:8000/readyz
           curl -fsS -o /dev/null http://127.0.0.1:8000/api/docs
           docker compose --profile app exec -T scheduler python manage.py run_scheduled_jobs
+      - name: Production stack configuration is valid
+        run: |
+          cp deploy/.env.production.example deploy/.env.production
+          MYSQL_PASSWORD=ci-only DOMAIN=ci.example.com docker compose -f deploy/compose.prod.yaml --env-file deploy/.env.production config -q
+          docker run --rm -e DOMAIN=ci.example.com -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.8 caddy validate --config /etc/caddy/Caddyfile
       - name: Container logs on failure
         if: failure()
         run: docker compose --profile app logs

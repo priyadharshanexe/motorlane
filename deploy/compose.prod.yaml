@@ -1,0 +1,84 @@
+# Production / public-demo stack: MySQL, Django (Gunicorn), the scheduler and Caddy for HTTPS.
+#
+#   cp deploy/.env.production.example deploy/.env.production   # then fill it in
+#   docker compose -f deploy/compose.prod.yaml --env-file deploy/.env.production up -d --build
+#
+# Caddy obtains and renews a Let's Encrypt certificate for $DOMAIN automatically once the
+# domain's DNS A/AAAA record points at this server and ports 80 and 443 are open.
+name: motorlane
+
+x-app: &app
+  build:
+    context: ..
+  image: motorlane:latest
+  env_file: .env.production
+  environment:
+    MYSQL_HOST: db
+    MYSQL_PORT: 3306
+    DJANGO_DEBUG: "0"
+    DJANGO_TRUST_HTTPS_PROXY: "1"
+  volumes:
+    - media:/app/media
+  depends_on:
+    db:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${MYSQL_NAME:-vehicle_rental}
+      MYSQL_USER: ${MYSQL_USER:-vehicle_rental}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in deploy/.env.production}
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql --protocol=tcp -h 127.0.0.1 -u \"$$MYSQL_USER\" \"$$MYSQL_DATABASE\" -e 'SELECT 1'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
+    # No published port: only the app containers can reach the database.
+
+  web:
+    <<: *app
+    command: ["sh", "docker/web.sh"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  scheduler:
+    <<: *app
+    command: ["sh", "docker/scheduler.sh"]
+    depends_on:
+      web:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2.8
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in deploy/.env.production}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - media:/srv/media:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  media:
+  caddy-data:
+  caddy-config:

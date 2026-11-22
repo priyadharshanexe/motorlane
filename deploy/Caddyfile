@@ -1,0 +1,23 @@
+# HTTPS terminator for Motorlane. Caddy gets and renews the certificate for {$DOMAIN}.
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Uploaded vehicle photos are served straight from the shared media volume.
+	handle_path /media/* {
+		root * /srv/media
+		header Cache-Control "public, max-age=604800"
+		file_server
+	}
+
+	# Everything else (the React app, API, admin, health checks) goes to Django.
+	handle {
+		reverse_proxy web:8000 {
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

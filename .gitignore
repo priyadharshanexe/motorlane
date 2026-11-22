@@ -10,3 +10,6 @@ staticfiles/
 *.sql
 .coverage
 .pytest_cache/
+
+# Production secrets for the deploy kit
+deploy/.env.production
