@@ -25,3 +25,7 @@ class OpenApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "swagger-ui")
         self.assertNotContains(response, "cdn.jsdelivr.net")
+
+    def test_docs_and_schema_work_with_and_without_a_trailing_slash(self):
+        for url in ("/api/docs", "/api/docs/", "/api/schema", "/api/schema/"):
+            self.assertEqual(self.client.get(url, secure=True).status_code, 200, url)

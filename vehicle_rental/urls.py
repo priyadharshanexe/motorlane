@@ -34,8 +34,8 @@ urlpatterns = [
     path('auth/', include('allauth.headless.urls')),
     re_path(r'^app(?:/.*)?$', react_app, name='react_app'),
     path('api/v1/', include('rental.api_urls')),
-    path('api/schema', SpectacularAPIView.as_view(), name='api_schema'),
-    path('api/docs', SpectacularSwaggerSplitView.as_view(url_name='api_schema'), name='api_docs'),
+    re_path(r'^api/schema/?$', SpectacularAPIView.as_view(), name='api_schema'),
+    re_path(r'^api/docs/?$', SpectacularSwaggerSplitView.as_view(url_name='api_schema'), name='api_docs'),
     path('', include('rental.urls')),
 ]
 
