@@ -2,9 +2,7 @@
 // their current design, as one lazy chunk: the redesigned public pages never download them.
 import { Link, Route, Routes } from "react-router-dom";
 import { Favorites } from "./Favorites";
-import { Checkout } from "./Checkout";
 import AccountScreen from "./AccountScreen";
-import { SignIn } from "./Auth";
 import { Layout, RequireSession } from "./Layout";
 import { Bookings } from "./Bookings";
 import { Dashboard } from "./Dashboard";
@@ -22,28 +20,6 @@ export default function LegacyApp() {
                 <Favorites />
               </RequireSession>
             }
-          />
-          <Route
-            path="checkout/:id"
-            element={
-              <RequireSession>
-                <Checkout />
-              </RequireSession>
-            }
-          />
-          <Route path="sign-in" element={<SignIn />} />
-          <Route path="register" element={<AccountScreen screen="signup" />} />
-          <Route
-            path="verify-email/:key"
-            element={<AccountScreen screen="verify" />}
-          />
-          <Route
-            path="reset-password"
-            element={<AccountScreen screen="request-reset" />}
-          />
-          <Route
-            path="reset-password/:key"
-            element={<AccountScreen screen="reset" />}
           />
           <Route
             path="account"
@@ -66,22 +42,6 @@ export default function LegacyApp() {
             element={
               <RequireSession>
                 <Dashboard owner />
-              </RequireSession>
-            }
-          />
-          <Route
-            path="bookings/:id"
-            element={
-              <RequireSession>
-                <Bookings />
-              </RequireSession>
-            }
-          />
-          <Route
-            path="bookings"
-            element={
-              <RequireSession>
-                <Bookings />
               </RequireSession>
             }
           />

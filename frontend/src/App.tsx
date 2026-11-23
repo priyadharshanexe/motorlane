@@ -10,6 +10,15 @@ const Catalog = lazy(() => import("./odo/Catalog").then(m => ({ default: m.Catal
 const VehicleDetail = lazy(() => import("./odo/VehicleDetail").then(m => ({ default: m.VehicleDetail })));
 // The workspace pages keep their current design until their slice; they load as one separate chunk.
 const LegacyApp = lazy(() => import("./LegacyApp"));
+// Slice 2: checkout, payment, trips and auth.
+const Checkout = lazy(() => import("./odo/Checkout").then(m => ({ default: m.Checkout })));
+const Trips = lazy(() => import("./odo/Trips").then(m => ({ default: m.Trips })));
+const TripDetail = lazy(() => import("./odo/Trips").then(m => ({ default: m.TripDetail })));
+const SignInPage = lazy(() => import("./odo/AuthPages").then(m => ({ default: m.SignInPage })));
+const RegisterPage = lazy(() => import("./odo/AuthPages").then(m => ({ default: m.RegisterPage })));
+const VerifyEmailPage = lazy(() => import("./odo/AuthPages").then(m => ({ default: m.VerifyEmailPage })));
+const ResetPage = lazy(() => import("./odo/AuthPages").then(m => ({ default: m.ResetPage })));
+const RequireSession = lazy(() => import("./odo/states").then(m => ({ default: m.RequireSession })));
 
 // Start fetching the shell and the current page's chunk together at startup, instead of one after the other
 // (shell, then page) as React would discover them: this removes a round trip from the first paint on slow networks.
@@ -33,6 +42,14 @@ export default function App() {
         <Route index element={<Home />} />
         <Route path="vehicles" element={<Catalog />} />
         <Route path="vehicles/:id" element={<VehicleDetail />} />
+        <Route path="checkout/:id" element={<RequireSession><Checkout /></RequireSession>} />
+        <Route path="bookings" element={<RequireSession><Trips /></RequireSession>} />
+        <Route path="bookings/:id" element={<RequireSession><TripDetail /></RequireSession>} />
+        <Route path="sign-in" element={<SignInPage />} />
+        <Route path="register" element={<RegisterPage />} />
+        <Route path="verify-email/:key" element={<VerifyEmailPage />} />
+        <Route path="reset-password" element={<ResetPage />} />
+        <Route path="reset-password/:key" element={<ResetPage />} />
       </Route>
       <Route path="*" element={<Suspense fallback={<div className="od-boot" />}><LegacyApp /></Suspense>} />
       </Routes>

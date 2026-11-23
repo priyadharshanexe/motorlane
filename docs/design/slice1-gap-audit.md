@@ -119,3 +119,10 @@ Verified in headless Chrome against port 8000 (stills in `docs/design/slice1/` a
 | Bundle split | ✅ The workspace/account pages, their layout and their Google Fonts load as one separate chunk; the public pages no longer download them. The public shell and home chunks are `modulepreload`ed from `index.html` (no chunk waterfall); the headline font is preloaded; the backdrop mounts after first paint; the 3D road loads when idle after first paint |
 | Mobile cold load, slow 4G + 4× CPU, median of 3 (LCP / first paint) | home 6.1 s → **3.5 s** / 4.7 → 3.5 s · catalog 6.3 → **5.8 s** / 4.8 → 2.4 s · detail 8.5 → **5.3 s** / 4.6 → 2.5 s. ❌ Still above the 2.5 s target. On catalog and detail the LCP is the vehicle photo, which waits for the API data; home is bound by script evaluation (TBT ~3.6 s at 4× CPU) |
 | Frame rate, home while scrolling (1920×870) | x1: 62–64 fps avg, p95 ~21 ms; x4: 38–40 fps, 8–12 long tasks. ❌ Not at the target |
+
+## Deferred (approved with slice 1)
+
+| Item | Status |
+| --- | --- |
+| Mobile LCP ≤ 2.5 s on 4G (home 3.5 s, catalog 5.8 s, detail 5.3 s now) | Open: deferred to a dedicated speed pass after the redesign |
+| About 60 fps at x4 while scrolling home (38–40 now) and p95 ≤ 16.7 ms at x1 (~21 ms now) | Open: deferred to the same speed pass |

@@ -15,6 +15,7 @@ import { reducedMotion } from "./primitives";
 import { ThemeProvider, useTheme } from "./theme";
 import { Backdrop } from "./world";
 import "./odo.css";
+import "./slice2.css";
 
 export function OdoLayout({ children }: { children: ReactNode }) {
   return <ThemeProvider><Shell>{children}</Shell></ThemeProvider>;
