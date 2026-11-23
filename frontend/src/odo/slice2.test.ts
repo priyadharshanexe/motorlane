@@ -29,3 +29,14 @@ describe('auth inline validation', () => {
     expect(strength('Abcdefghijk1!')).toBe(4)
   })
 })
+
+describe("timeline money stops", async () => {
+  const { stopLabel } = await import("./Trips");
+  const base = { id: 1, from_status: "Confirmed", to_status: "Confirmed", actor: "renter", at: "2027-01-01T10:00:00Z" };
+  it("labels the paid stop for the viewer", () => {
+    expect(stopLabel({ ...base, kind: "paid", note: "Paid ₹5,200 · demo payment" }, "Asha")).toBe("You paid ₹5,200");
+    expect(stopLabel({ ...base, kind: "paid", note: "Paid ₹5,200 · demo payment" }, "Asha", "owner")).toBe("Renter paid ₹5,200");
+    expect(stopLabel({ ...base, kind: "refund_issued", note: "Refund of ₹3,000 issued (cancellation)" }, "Asha")).toBe("Refund of ₹3,000 issued");
+    expect(stopLabel({ ...base, kind: "refunded", note: "₹3,000 refunded" }, "Asha")).toBe("₹3,000 refunded");
+  });
+});

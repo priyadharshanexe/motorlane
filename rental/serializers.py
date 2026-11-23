@@ -140,7 +140,7 @@ class BookingEventSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BookingEvent
-        fields = ("id", "from_status", "to_status", "actor", "at", "note")
+        fields = ("id", "kind", "from_status", "to_status", "actor", "at", "note")
 
 
 class BookingDetailSerializer(BookingSerializer):

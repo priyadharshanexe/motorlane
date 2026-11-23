@@ -72,7 +72,7 @@ class NoShowAndExpiryTests(TestCase):
         payment = Payment.objects.get()
         self.assertEqual(payment.refunded_amount, 700)
         self.assertEqual(RefundIntent.objects.get().reason, "deposit")
-        self.assertIn("Deposit of ₹700.00 refunded.", booking.events.last().note)
+        self.assertIn("Deposit of ₹700.00 refunded.", booking.events.filter(kind="status").last().note)
         self.assertEqual([m.subject for m in mail.outbox], ["Your Van booking expired"])
 
     def test_expired_request_emails_the_renter(self):

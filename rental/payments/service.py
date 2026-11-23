@@ -29,6 +29,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from ..models import Booking, Payment, RefundIntent, WebhookEvent
+from ..services.events import record_paid, record_refund_issued, record_refunded
 from ..services.pricing import money
 from .providers import PaymentError, get_provider
 
@@ -79,6 +80,7 @@ def mark_paid(payment, payment_id):
     payment.save(update_fields=["payment_id", "status", "paid_at"])
     logger.info("payment_completed booking_id=%s provider=%s", payment.booking_id, payment.provider)
     booking = Booking.objects.select_for_update().get(pk=payment.booking_id)
+    record_paid(payment, booking)
     if booking.status not in PAYABLE:
         logger.warning("payment_after_close booking_id=%s status=%s: refunding in full", booking.pk, booking.status)
         issue_refund(payment, payment.amount - payment.refunded_amount, "booking_closed")
@@ -137,6 +139,8 @@ def issue_refund(payment, amount, reason):
     payment.status = (Payment.Status.REFUNDED if payment.refunded_amount >= payment.amount
                       else Payment.Status.PARTIALLY_REFUNDED)
     payment.save(update_fields=["refunded_amount", "status", "cancellation_fee"])
+    # After commit, so the stop follows the status change that caused it (cancel, return).
+    transaction.on_commit(lambda: record_refund_issued(intent, Booking.objects.get(pk=payment.booking_id)))
     logger.info("refund_recorded booking_id=%s amount=%s reason=%s", payment.booking_id, amount, reason)
     transaction.on_commit(lambda: process_refund(intent.pk))
     return intent
@@ -174,6 +178,7 @@ def process_refund(intent_id, now=None):
     RefundIntent.objects.filter(pk=intent.pk).update(provider_refund_id=refund_id, status=status, last_error="",
                                                      updated_at=timezone.now())
     logger.info("refund_sent intent_id=%s provider_refund_id=%s status=%s", intent.pk, refund_id, status)
+    record_refunded(intent.pk)
     return refund_id
 
 
@@ -197,6 +202,7 @@ def reconcile_refunds(now=None):
             continue
         if status != RefundIntent.Status.SENT:
             RefundIntent.objects.filter(pk=intent.pk).update(status=status, updated_at=timezone.now())
+            record_refunded(intent.pk)
             counts[status] += 1
     for intent in RefundIntent.objects.filter(status=RefundIntent.Status.PENDING, attempts__gt=0).select_related("payment"):
         try:
@@ -208,6 +214,7 @@ def reconcile_refunds(now=None):
             RefundIntent.objects.filter(pk=intent.pk).update(
                 provider_refund_id=refund_id, status=PROVIDER_STATUS.get(provider_status, RefundIntent.Status.SENT),
                 updated_at=timezone.now())
+            record_refunded(intent.pk)
             counts["recovered"] += 1
     logger.info("refunds_reconciled %s", " ".join(f"{k}={v}" for k, v in counts.items()))
     return counts
@@ -284,8 +291,12 @@ def apply_event(event_type, data):
         return bool(updated.update(status=Payment.Status.FAILED))
     elif event_type == "refund.processed":
         entity = data.get("refund", {}).get("entity", {})
-        return bool(RefundIntent.objects.filter(provider_refund_id=entity.get("id", "")).update(
-            status=RefundIntent.Status.SUCCEEDED))
+        intents = RefundIntent.objects.filter(provider_refund_id=entity.get("id", ""))
+        ids = list(intents.values_list("pk", flat=True))
+        updated = intents.update(status=RefundIntent.Status.SUCCEEDED)
+        for pk in ids:
+            record_refunded(pk)
+        return bool(updated)
     return False
 
 

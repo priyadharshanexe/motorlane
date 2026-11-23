@@ -97,7 +97,7 @@ class PaymentFlowTests(TestCase):
         payment = Payment.objects.get()
         self.assertEqual((payment.status, payment.refunded_amount, payment.cancellation_fee),
                          ("refunded", Decimal("3000.00"), Decimal("0.00")))
-        self.assertEqual(booking.events.last().note, "Refund of ₹3000.00 issued.")
+        self.assertEqual(booking.events.filter(kind="status").last().note, "Refund of ₹3000.00 issued.")
 
     def test_late_cancellation_keeps_a_fee_but_returns_the_deposit(self):
         booking = self.book(days_ahead=1, pickup=time(23))  # less than 48 hours away

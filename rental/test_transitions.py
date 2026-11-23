@@ -54,7 +54,7 @@ class TransitionMatrixTests(TestCase):
                     if status in allowed:
                         self.assertEqual(response.status_code, 200, response.content)
                         self.assertEqual(booking.status, destination)
-                        self.assertEqual(booking.events.last().to_status, destination)
+                        self.assertEqual(booking.events.filter(kind="status").last().to_status, destination)
                     else:
                         self.assertEqual(response.status_code, 409, response.content)
                         self.assertEqual(booking.status, status)
@@ -170,7 +170,9 @@ class EndToEndApiTests(TestCase):
             review = self.client.post(reverse("api_review", args=[booking_id]), {"rating": 5, "comment": "Great"}, secure=True)
             self.assertEqual(review.status_code, 201)
             detail = self.client.get(reverse("api_booking_detail", args=[booking_id]), secure=True).json()
-            self.assertEqual([e["to_status"] for e in detail["timeline"]], ["Pending", "Confirmed", "In progress", "Returned"])
+            self.assertEqual([e["to_status"] for e in detail["timeline"] if e["kind"] == "status"],
+                             ["Pending", "Confirmed", "In progress", "Returned"])
+            self.assertIn("paid", [e["kind"] for e in detail["timeline"]])
             self.assertTrue(detail["reviewed"])
             vehicle = self.client.get(reverse("api_vehicle_detail", args=[vehicle_id]), secure=True).json()
             self.assertEqual((vehicle["rating"], vehicle["review_count"]), (5.0, 1))

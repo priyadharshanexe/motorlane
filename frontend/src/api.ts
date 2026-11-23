@@ -57,7 +57,7 @@ export interface Booking extends DateRange {
   } | null
 }
 export interface VehiclePhoto { id: number; url: string; small: string; large: string; order: number; is_cover: boolean }
-export interface TimelineEvent { id: number; from_status: string; to_status: string; actor: string; at: string; note: string }
+export interface TimelineEvent { id: number; kind?: 'status' | 'paid' | 'refund_issued' | 'refunded'; from_status: string; to_status: string; actor: string; at: string; note: string }
 export interface Maintenance extends DateRange { id: number; reason: string }
 export interface BookingValue { vehicle_id: number; vehicle__name: string; bookings: number; value: string }
 

@@ -170,9 +170,14 @@ export function TripDetail() {
   );
 }
 
-/** Labels from the viewer's side: "You requested", "Asha approved", "Automatically expired". */
-function stopLabel(event: TimelineEvent, host: string) {
-  if (!event.from_status) return "You requested";
+/** Labels from the viewer's side: "You requested", "Asha approved", "You paid ₹5,200", "Automatically expired". */
+export function stopLabel(event: TimelineEvent, host: string, viewer: "renter" | "owner" = "renter") {
+  const amount = event.note.match(/₹[\d,.]+/)?.[0] ?? "";
+  const payer = viewer === "renter" ? "You" : "Renter";
+  if (event.kind === "paid") return `${payer} paid ${amount}`.trim();
+  if (event.kind === "refund_issued") return `Refund of ${amount} issued`;
+  if (event.kind === "refunded") return `${amount} refunded`;
+  if (!event.from_status) return viewer === "renter" ? "You requested" : "Renter requested";
   const who = event.actor === "renter" ? "You" : event.actor === "owner" ? host : event.actor === "staff" ? "Motorlane" : "Automatically";
   const verb: Record<string, string> = {
     Confirmed: "approved", Rejected: "declined", "In progress": "handed over the keys", Returned: "recorded the return",
@@ -182,16 +187,18 @@ function stopLabel(event: TimelineEvent, host: string) {
   return `${who} ${verb[event.to_status] ?? `moved it to ${event.to_status}`}`;
 }
 const NEXT_STOPS: Partial<Record<Booking["status"], string[]>> = {
-  Pending: ["Owner approves", "Keys handed over", "Return"],
-  Confirmed: ["Keys handed over", "Return"],
+  Pending: ["Owner approves", "Payment", "Keys handed over", "Return"],
+  Confirmed: ["Payment", "Keys handed over", "Return"],
   "In progress": ["Return"],
 };
 
 function TimelineRoad({ booking, host }: { booking: Detail; host: string }) {
   const recorded = booking.timeline;
-  const ghosts = NEXT_STOPS[booking.status] ?? [];
-  const stops = [...recorded.map(e => ({ label: stopLabel(e, host), time: stamp(e.at), note: e.note, state: e.to_status, ghost: false })),
-    ...ghosts.map(label => ({ label, time: "Not yet", note: "", state: "", ghost: true }))];
+  const paid = recorded.some(e => e.kind === "paid");
+  const ghosts = (NEXT_STOPS[booking.status] ?? []).filter(s => s !== "Payment" || (booking.payment_required && !paid));
+  const stops = [...recorded.map(e => ({ label: stopLabel(e, host), time: stamp(e.at), note: !e.kind || e.kind === "status" ? e.note : e.kind === "refund_issued" ? (e.note.match(/\((.+)\)$/)?.[1] ?? "") : "",
+    state: e.kind && e.kind !== "status" ? e.kind : e.to_status, ghost: false, money: e.kind === "paid" })),
+    ...ghosts.map(label => ({ label, time: "Not yet", note: "", state: "", ghost: true, money: false }))];
   const n = Math.max(1, stops.length);
   const spacing = 150, height = 40 + (n - 1) * spacing + 40;
   // A gently winding road through the stops; the drawn part ends at the last recorded stop.
@@ -232,7 +239,7 @@ function TimelineRoad({ booking, host }: { booking: Detail; host: string }) {
         {stops.map((stop, i) => (
           <li key={`${stop.label}-${i}`} className={`${stop.ghost ? "ghost" : i < reached ? "reached" : ""}`} style={{ top: ys[i] - 14 } as CSSProperties}>
             <span className="od-tl-dot" data-state={stop.state} />
-            <div><b>{stop.label}</b><small className="mono">{stop.time}</small>{stop.note && <span className="od-tl-note">{stop.note}</span>}</div>
+            <div><b>{stop.label}</b>{stop.money && <span className="od-tl-stamp" aria-hidden="true">PAID</span>}<small className="mono">{stop.time}</small>{stop.note && <span className="od-tl-note">{stop.note}</span>}</div>
           </li>
         ))}
       </ol>

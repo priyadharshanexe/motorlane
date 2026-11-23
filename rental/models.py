@@ -194,8 +194,22 @@ class Booking(models.Model):
         return f"{self.user.name} - {self.vehicle.name}"
 
 class BookingEvent(models.Model):
-    """Append-only audit trail: one row per creation, status change or expiry."""
+    """Append-only audit trail: one row per creation, status change or expiry, plus money events.
 
+    `kind` is "status" for status changes; "paid" (one per payment), "refund_issued" and
+    "refunded" (one each per refund intent) record money moving without a status change, so
+    `from_status` and `to_status` both hold the booking's status at that moment.
+    """
+
+    class Kind(models.TextChoices):
+        STATUS = "status"
+        PAID = "paid"
+        REFUND_ISSUED = "refund_issued"
+        REFUNDED = "refunded"
+
+    kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.STATUS)
+    payment = models.ForeignKey("Payment", on_delete=models.CASCADE, null=True, blank=True, related_name="events")
+    refund = models.ForeignKey("RefundIntent", on_delete=models.CASCADE, null=True, blank=True, related_name="events")
     booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="events")
     from_status = models.CharField(max_length=20, blank=True)
     to_status = models.CharField(max_length=20, choices=Booking.Status.choices)
@@ -209,6 +223,12 @@ class BookingEvent(models.Model):
     class Meta:
         ordering = ["at", "pk"]
         indexes = [models.Index(fields=["booking", "at"])]
+        constraints = [
+            # Recording money events is idempotent: a redelivered webhook or a second
+            # reconcile pass cannot add a second "paid" or "refunded" stop.
+            models.UniqueConstraint(fields=["payment", "kind"], name="bookingevent_once_per_payment"),
+            models.UniqueConstraint(fields=["refund", "kind"], name="bookingevent_once_per_refund"),
+        ]
 
     def __str__(self):
         return f"#{self.booking_id} {self.from_status or 'new'} -> {self.to_status}"

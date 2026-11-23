@@ -79,13 +79,14 @@ class TimelineTests(TestCase):
             url = reverse("api_booking_action", args=[booking.pk, action])
             self.assertEqual(self.client.post(url, secure=True).status_code, 200)
         timeline = self.client.get(reverse("api_booking_timeline", args=[booking.pk]), secure=True).json()
-        self.assertEqual([(e["from_status"], e["to_status"], e["actor"]) for e in timeline], [
+        self.assertEqual([e["kind"] for e in timeline if e["kind"] != "status"], ["paid"])
+        self.assertEqual([(e["from_status"], e["to_status"], e["actor"]) for e in timeline if e["kind"] == "status"], [
             ("", "Pending", "renter"), ("Pending", "Confirmed", "owner"),
             ("Confirmed", "In progress", "owner"), ("In progress", "Returned", "owner"),
         ])
         self.client.force_login(self.renter.user)
         detail = self.client.get(reverse("api_booking_detail", args=[booking.pk]), secure=True).json()
-        self.assertEqual(len(detail["timeline"]), 4)
+        self.assertEqual(len(detail["timeline"]), 5)  # four status stops and the paid stop
         self.client.force_login(self.stranger.user)
         self.assertEqual(self.client.get(reverse("api_booking_timeline", args=[booking.pk]), secure=True).status_code, 404)
 
