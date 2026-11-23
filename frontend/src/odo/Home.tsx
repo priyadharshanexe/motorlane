@@ -13,17 +13,23 @@ import { drive, gsap, IDLE_KMH, MAX_KMH, onDrive, ScrollTrigger } from "./drive"
 import { KeyTag, KeyTagSkeleton } from "./KeyTag";
 import { canRun3D, Odometer, reducedMotion, TripMeter, useOnce } from "./primitives";
 import { useTheme } from "./theme";
+import { TripChapter } from "./TripChapter";
+import { Hud, useChapters } from "./world";
 
 const Road3D = lazy(() => import("./Road3D"));
 type Catalog = { count: number; next: string | null; previous: string | null; results: Vehicle[] };
 
 export function Home() {
+  const root = useRef<HTMLDivElement>(null);
+  useChapters(root);
   return (
-    <div className="od-home">
+    <div className="od-home" ref={root}>
       <Hero />
       <Rack />
       <HowItWorks />
+      <TripChapter chapter="Stage 4 · Your trip" title="Your trip, mile by mile" />
       <HostCallout />
+      <Hud hero=".od-hero" />
     </div>
   );
 }
@@ -48,6 +54,16 @@ function Hero() {
   const streaks = useRef<HTMLDivElement>(null), sheet = useRef<HTMLSpanElement>(null), flatDashes = useRef<HTMLSpanElement>(null);
   const needle = useRef<SVGLineElement>(null), kmh = useRef<HTMLSpanElement>(null);
   const [use3D] = useState(canRun3D);
+  // The 3D road (and its ~230 KB chunk) loads only once the browser is idle after the first paint, so it never
+  // competes with the headline (the LCP); the 2D road shows until then.
+  const [load3D, setLoad3D] = useState(false);
+  useEffect(() => {
+    if (!use3D) return;
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (w.requestIdleCallback) { const id = w.requestIdleCallback(() => setLoad3D(true), { timeout: 2500 }); return () => w.cancelIdleCallback?.(id); }
+    const id = window.setTimeout(() => setLoad3D(true), 1200);
+    return () => window.clearTimeout(id);
+  }, [use3D]);
   const [onScreen, setOnScreen] = useState(true);
 
   useLayoutEffect(() => {
@@ -55,6 +71,16 @@ function Hero() {
     const visibility = ScrollTrigger.create({ trigger: section.current, start: "top bottom", end: "bottom top",
       onToggle: self => setOnScreen(self.isActive) });
     return () => visibility.kill();
+  }, []);
+
+  // Ignition check: on load the speedometer needle sweeps to the top of the dial and settles back (about 1.1 s).
+  const sweep = useRef({ kmh: 0 });
+  useEffect(() => {
+    if (reducedMotion()) return;
+    const tween = gsap.timeline()
+      .to(sweep.current, { kmh: MAX_KMH, duration: 0.55, ease: "power2.out", delay: 0.4 })
+      .to(sweep.current, { kmh: 0, duration: 0.6, ease: "power2.inOut" });
+    return () => { tween.kill(); };
   }, []);
 
   // Per frame from the shared drive state: headline stretch, speed streaks, speedometer, and the 2D road.
@@ -72,8 +98,9 @@ function Hero() {
           sheet.current.style.transform = `translate3d(0, ${(streakY - 540).toFixed(0)}px, 0) scaleY(${(0.6 + t * 1.4).toFixed(2)})`;
         }
       }
-      if (needle.current) needle.current.style.transform = `rotate(${(-125 + (drive.kmh / MAX_KMH) * 250).toFixed(1)}deg)`;
-      const rounded = Math.round(drive.kmh);
+      const shownSpeed = Math.max(drive.kmh, sweep.current.kmh);
+      if (needle.current) needle.current.style.transform = `rotate(${(-125 + (shownSpeed / MAX_KMH) * 250).toFixed(1)}deg)`;
+      const rounded = Math.round(shownSpeed);
       if (kmh.current && rounded !== shownKmh) { shownKmh = rounded; kmh.current.textContent = String(rounded).padStart(3, "0"); }
       if (flatDashes.current) {
         distance = (distance + (40 + t * 1400) * dt) % 82;
@@ -98,7 +125,7 @@ function Hero() {
     <section className="od-hero" ref={section} data-chapter="Highway 1 · Start">
       <div className="od-hero-stage">
         <div className="od-hero-scene">
-          {use3D ? (
+          {use3D && load3D ? (
             <Suspense fallback={<FlatRoad dashes={flatDashes} />}>
               <Road3D light={theme === "light"} active={onScreen} places={places} />
             </Suspense>
@@ -179,6 +206,30 @@ function Rack() {
   const rows = (query.data?.results ?? []).slice(0, 6);
   const rack = useRef<HTMLDivElement>(null);
   const [arrived, setArrived] = useState(false);
+  // Mouse drag along the lane with a little inertia (touch and trackpads scroll it natively).
+  const drag = useRef<{ x: number; left: number; v: number; t: number; raf: number } | null>(null);
+  const onDown = (event: React.PointerEvent) => {
+    if (event.pointerType !== "mouse" || event.button !== 0 || !rack.current) return;
+    cancelAnimationFrame(drag.current?.raf ?? 0);
+    drag.current = { x: event.clientX, left: rack.current.scrollLeft, v: 0, t: performance.now(), raf: 0 };
+  };
+  const onMove = (event: React.PointerEvent) => {
+    const d = drag.current, lane = rack.current;
+    if (!d || !lane || !event.buttons) return;
+    const now = performance.now(), next = d.left - (event.clientX - d.x);
+    d.v = (lane.scrollLeft - next) / Math.max(1, now - d.t); d.t = now;
+    lane.scrollLeft = next;
+    if (Math.abs(event.clientX - d.x) > 4) lane.classList.add("dragging");
+  };
+  const onUp = () => {
+    const d = drag.current, lane = rack.current;
+    if (!d || !lane) return;
+    let v = -d.v * 16;
+    const coast = () => { lane.scrollLeft += v; v *= 0.92; if (Math.abs(v) > 0.4 && !reducedMotion()) d.raf = requestAnimationFrame(coast); else lane.classList.remove("dragging"); };
+    d.raf = requestAnimationFrame(coast);
+    drag.current = null;
+    window.setTimeout(() => lane.classList.remove("dragging"), 0);
+  };
   const section = useOnce<HTMLElement>(() => setArrived(true), "top 72%");
   // When the rack scrolls in, the tags fall onto their hooks and swing until they settle (one damped swing each).
   useLayoutEffect(() => {
@@ -207,7 +258,8 @@ function Rack() {
       </div>
       <div className="od-rack-bar" aria-hidden="true" />
       <Notice error={query.error} />
-      <div className="od-tags" ref={rack}>
+      <div className="od-tags od-lane" ref={rack} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}
+        onClickCapture={event => { if (rack.current?.classList.contains("dragging")) { event.preventDefault(); event.stopPropagation(); } }}>
         {query.isPending && Array.from({ length: 6 }, (_, i) => <KeyTagSkeleton key={i} />)}
         {rows.map((vehicle, index) => (
           <div className="od-drop" key={vehicle.id} style={{ opacity: arrived || reducedMotion() ? undefined : 0 }}>
@@ -323,7 +375,7 @@ function StopIcon({ kind }: { kind: string }) {
 
 function HostCallout() {
   return (
-    <section className="od-host-callout">
+    <section className="od-host-callout" data-chapter="Rest stop · Become a host">
       <div>
         <span className="od-eyebrow">Your vehicle, new possibilities</span>
         <h2>Let your vehicle go places.</h2>

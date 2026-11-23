@@ -12,6 +12,7 @@
   --tarmac: #121417; --raised: #1B1E22; --kerb: #2C3036; --chalk: #EDEAE3; --dust: #A3A7AE;
   --lane: #FFC531; --lane-text: #FFC531; --on-lane: #16181B; --asphalt: #1E2125; --ghost: #3A3F46; --wheel: #0B0C0E;
   --pending: #FFC531; --confirmed: #4FB3FF; --progress: #3DDC97; --stop: #FF6B6B; --reflector: #FFE38A;
+  --weekend: #FFB86B; --deposit: #4FB3FF;
   --halo: rgba(18, 20, 23, .82);
   position: relative; isolation: isolate; flex: 1; display: flex; flex-direction: column;
   min-height: 100vh; overflow-x: clip; background: var(--tarmac); color: var(--chalk);
@@ -21,6 +22,7 @@
   --tarmac: #F3F1EC; --raised: #FFFFFF; --kerb: #D9D5CC; --chalk: #16181B; --dust: #5A5E66;
   --lane-text: #946000; --asphalt: #74777C; --ghost: #CFCAC0; --wheel: #FFFFFF;
   --pending: #946000; --confirmed: #0B5CA8; --progress: #0E7A4E; --stop: #B3261E; --reflector: #16181B;
+  --weekend: #8A4B00; --deposit: #0B5CA8;
   --halo: rgba(248, 245, 238, .9);
 }
 .od-boot { min-height: 100vh; background: #121417; }
@@ -74,7 +76,7 @@
 @keyframes od-draw { to { stroke-dashoffset: 0; } }
 .od-header { position: fixed; z-index: 20; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 24px;
   padding: 14px var(--gutter); transition: background-color .3s var(--ease-out), box-shadow .3s var(--ease-out); }
-.od-header.solid { background: color-mix(in srgb, var(--tarmac) 92%, transparent); box-shadow: 0 1px 0 var(--kerb); }
+.od-header.solid { background: var(--tarmac); box-shadow: 0 1px 0 var(--kerb), 0 10px 24px -18px #000a; }
 .od-brand { display: inline-flex; gap: 10px; align-items: center; color: var(--chalk) !important; font: 800 18px var(--display); font-stretch: 125%;
   letter-spacing: .03em; background: var(--halo); padding: 6px 12px 6px 8px; border-radius: 8px; }
 .od-nav { display: flex; gap: 4px; background: var(--halo); border-radius: 999px; padding: 4px; }
@@ -94,7 +96,7 @@
 .od-menu-sheet a, .od-menu-signout { display: block; padding: 10px 12px; color: var(--chalk) !important; text-align: left; font-weight: 500; }
 .od-menu-sheet a:hover { background: var(--tarmac); }
 .od-menu-signout { width: 100%; border: 0; background: transparent; color: var(--chalk); }
-.od-app .od-main { flex: 1; padding: 0; margin: 0; max-width: none; }  /* the app's global main padding would leave a band */
+.od-app .od-main { flex: 1; padding: 0; margin: 0; max-width: none; position: relative; z-index: 1; }  /* the app's global main padding would leave a band */
 
 /* odometer + trip meter */
 .odo { display: inline-flex; gap: 4px; align-items: center; vertical-align: middle; }
@@ -131,14 +133,14 @@
   background: repeating-linear-gradient(90deg, transparent 0 131px, #FFE9A899 131px 133px, transparent 133px 263px);
   -webkit-mask: repeating-linear-gradient(transparent 0 120px, #000 220px, transparent 360px 540px);
           mask: repeating-linear-gradient(transparent 0 120px, #000 220px, transparent 360px 540px); }
-.od-hero-copy { position: relative; z-index: 2; padding: max(104px, 12vh) var(--gutter) 0; max-width: 860px; }
-.od-app[data-theme="light"] .od-hero-copy::before { content: ""; position: absolute; z-index: -1; inset: 40px -80px -60px -20px; pointer-events: none;
-  background: radial-gradient(ellipse at 35% 45%, rgba(248, 245, 238, .92) 0%, rgba(248, 245, 238, .72) 45%, rgba(248, 245, 238, 0) 74%); }
+.od-hero-copy { position: relative; z-index: 2; padding: max(104px, 12vh) var(--gutter) 0; max-width: 760px; }
+.od-app[data-theme="light"] .od-hero-copy::before { content: ""; position: absolute; z-index: -1; inset: 70px 40px -30px 10px; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(248, 245, 238, .9) 0%, rgba(248, 245, 238, .68) 62%, rgba(248, 245, 238, 0) 100%); }
 .od-hero h1 { font-weight: 900 !important; font-size: clamp(44px, min(4.6vw, 8.4vh), 80px) !important; font-stretch: 125%;
   transform-origin: 0 50%; will-change: transform; animation: od-stretch 1.3s var(--ease-out) both; line-height: .95 !important; }
 .od-hero h1:focus { outline: none; }
 .od-hero h1 em { font-style: normal; color: var(--lane-text); }
-@keyframes od-stretch { from { font-stretch: 62%; opacity: 0; } to { font-stretch: 125%; opacity: 1; } }
+@keyframes od-stretch { from { font-stretch: 62%; } to { font-stretch: 125%; } }
 .od-hero-copy > p { color: var(--dust); margin-top: 22px; max-width: 480px; font-size: 18px; }
 .od-app[data-theme="light"] .od-hero-copy > p { color: #3E4249; }
 .od-cue { display: flex !important; align-items: center; gap: 10px; font-size: 13px !important; color: var(--lane-text) !important;
@@ -186,7 +188,14 @@
 .od-rack h2 { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .od-how h2 em { font-style: normal; color: var(--lane-text); }
 .od-lane-head { display: flex; justify-content: space-between; align-items: end; gap: 24px; flex-wrap: wrap; margin-bottom: 26px; }
-.od-rack-bar { height: 10px; margin: 0 -10px 30px; border-radius: 5px; background: linear-gradient(var(--dust), var(--kerb)); }
+.od-rack-bar { height: 12px; margin: 0 calc(var(--gutter) * -1) 0; border-radius: 0; position: relative; z-index: 1;
+  background: linear-gradient(#C9CED4, #7E858D 55%, #5A6068); box-shadow: 0 6px 10px -6px #000a; }
+.od-tags.od-lane { display: flex; gap: 30px; overflow-x: auto; overflow-y: visible; padding: 34px 4px 30px; scroll-snap-type: x proximity;
+  scrollbar-width: thin; cursor: grab; overscroll-behavior-x: contain; }
+.od-lane.dragging { cursor: grabbing; scroll-snap-type: none; user-select: none; }
+.od-lane .od-drop, .od-lane .od-tag-skeleton { flex: 0 0 min(320px, 80vw); scroll-snap-align: start; position: relative; }
+.od-lane .od-drop::before { content: ""; position: absolute; left: 50%; top: -34px; width: 3px; height: 50px; margin-left: -1.5px; z-index: 4;
+  background: repeating-linear-gradient(#9AA1A8 0 6px, #5A6068 6px 9px); border-radius: 2px; }
 .od-tags { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 40px 30px; }
 .od-drop { transform-origin: 50% 0; }
 .od-rack > .od-cta { margin-top: 44px; }
@@ -210,6 +219,8 @@
   background: var(--tarmac); border: 2px solid var(--kerb); z-index: 3; }
 .od-tag-media { position: relative; }
 .od-tag-media > a { display: block; }
+.od-wipe .photo { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); transition: clip-path .7s var(--ease-out); }
+.od-wipe.loaded .photo { clip-path: polygon(0 0, 100% 0, 100% 92%, 0 100%); }
 .od-tag .photo, .od-tag .photo.placeholder { width: 100%; height: auto; aspect-ratio: 1.55; object-fit: cover; display: block; border-radius: 0;
   clip-path: polygon(0 0, 100% 0, 100% 92%, 0 100%); }
 .od-tag .photo.placeholder { display: grid; place-items: center; background: var(--asphalt); color: var(--dust); }
@@ -250,8 +261,10 @@
 .od-how-pin.on circle { stroke: var(--lane); } .od-how-pin.on .core { fill: var(--lane); }
 .od-how-pin.finish.on circle { stroke: var(--progress); } .od-how-pin.finish.on .core { fill: var(--progress); }
 .od-how-stops { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 24px; }
-.od-how-stop { text-align: center; opacity: .28; transform: translate3d(0, 24px, 0); transition: opacity var(--t-base) var(--ease-out), transform var(--t-base) var(--ease-spring); }
-.od-how-stop.on { opacity: 1; transform: none; }
+.od-how-stop { text-align: center; transform: translate3d(0, 24px, 0); transition: transform var(--t-base) var(--ease-spring); color: var(--dust); }
+.od-how-stop .od-stop-icon { opacity: .3; transition: opacity var(--t-base) var(--ease-out); }
+.od-how-stop.on { transform: none; color: var(--chalk); }
+.od-how-stop.on .od-stop-icon { opacity: 1; }
 .od-how-stop b { display: block; margin: 10px 0 6px; font: 800 19px var(--display); font-stretch: 112%; text-transform: uppercase; }
 .od-how-stop p { color: var(--dust); font-size: 15px; }
 .od-stop-icon { width: 56px; height: 56px; overflow: visible; display: block; margin: 0 auto; }
@@ -272,7 +285,10 @@
 
 /* footer: the toll gate */
 .od-footer { padding: 60px var(--gutter) 40px; border-top: 1px solid var(--kerb); }
-.od-gate { width: min(100%, 900px); height: auto; display: block; margin: 0 auto 40px; overflow: hidden; }
+.od-footer { position: relative; z-index: 1; }
+.od-gate { width: 100%; max-width: 1400px; height: auto; display: block; margin: 0 auto 40px; overflow: hidden; }
+.od-gate-lane { stroke: var(--lane); stroke-width: 4; fill: none; }
+.od-gate-car .body { fill: var(--lane); } .od-gate-car .cabin { fill: #16181B; opacity: .8; } .od-gate-car .wheel { fill: #16181B; }
 .od-gate-road { fill: var(--asphalt); } .od-gate-check rect { fill: var(--chalk); } .od-gate-post { fill: var(--kerb); }
 .od-gate-arm { fill: var(--chalk); } .od-gate-stripe { fill: #E14B4B; }
 .od-gate-light { fill: #E14B4B; transition: fill .3s; } .od-gate-light.go { fill: var(--progress); }
@@ -299,11 +315,25 @@
 .od-sheet { display: none; }
 .od-rail-desk { background: var(--raised); border: 1px solid var(--kerb); padding: 20px; }
 .od-gearbox { display: grid; gap: 16px; }
+.od-gearbox .od-field-row { grid-template-columns: 1fr; }
+.od-price-read { display: flex; justify-content: space-between; font: 700 18px var(--mono); color: var(--lane-text); }
+.od-price-track { position: relative; height: 28px; margin-top: 4px; }
+.od-price-track::before { content: ""; position: absolute; left: 0; right: 0; top: 12px; height: 4px; background: var(--kerb); border-radius: 2px; }
+.od-price-track::after { content: ""; position: absolute; left: var(--lo); right: calc(100% - var(--hi)); top: 12px; height: 4px; background: var(--lane); border-radius: 2px; }
+.od-app .od-price-track input[type="range"] { position: absolute; inset: 0; width: 100%; margin: 0; padding: 0; border: 0; min-height: 0; background: none;
+  pointer-events: none; -webkit-appearance: none; appearance: none; z-index: 1; }
+.od-price-track input[type="range"]::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--lane); border: 3px solid var(--tarmac); box-shadow: 0 0 0 1px var(--lane); cursor: grab; }
+.od-price-track input[type="range"]::-moz-range-thumb { pointer-events: auto; width: 18px; height: 18px; border-radius: 50%; background: var(--lane);
+  border: 3px solid var(--tarmac); cursor: grab; }
+.od-price-track input[type="range"]:focus-visible { outline: none; }
+.od-price-track input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--reflector); }
 .od-gearbox .od-go { width: 100%; }
 .od-reset { text-align: center; font-weight: 600; }
 .od-results { min-height: 600px; }
 .od-tags-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
 .od-slot { min-width: 0; }
+.od-visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .od-pages { display: flex; gap: 12px; margin-top: 40px; }
 .od-road-ends { text-align: center; padding: 50px 20px; display: grid; justify-items: center; gap: 12px; }
 .od-road-ends svg { width: 280px; }
@@ -321,7 +351,8 @@
 .od-gallery-viewport { position: relative; overflow: hidden; background: var(--asphalt); touch-action: pan-y; }
 .od-gallery-track { display: flex; height: 100%; cursor: grab; touch-action: pan-y; will-change: transform; }
 .od-gallery-track:active { cursor: grabbing; }
-.od-gallery-track img { flex: 0 0 100%; width: 100%; height: 100%; object-fit: cover; user-select: none; -webkit-user-drag: none; }
+.od-gallery-viewport.zoomed .od-gallery-track { cursor: move; }
+.od-gallery-track img { transform-origin: 50% 50%; flex: 0 0 100%; width: 100%; height: 100%; object-fit: cover; user-select: none; -webkit-user-drag: none; }
 .od-gallery-empty { display: grid; place-items: center; background: var(--asphalt); color: var(--dust); }
 .od-gallery-nav { position: absolute; top: 50%; translate: 0 -50%; width: 46px; height: 46px; min-height: 46px !important; padding: 0;
   border-radius: 50% !important; background: var(--halo) !important; color: var(--chalk) !important; border: 1px solid var(--kerb) !important; font-size: 24px; }
@@ -353,6 +384,8 @@
 .od-reserve > p { color: var(--dust); }
 .od-reserve-form { display: grid; gap: 14px; }
 .od-reserve .od-go { width: 100%; }
+.od-reserve-total { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--kerb); }
+.od-reserve-odo { display: inline-flex; align-items: center; font: 700 30px var(--mono); color: var(--lane-text); }
 .od-fine { color: var(--dust); font-size: 13px; text-align: center; }
 .od-quote { border-left: 4px solid var(--progress); padding: 10px 14px; background: var(--tarmac); }
 .od-quote.bad { border-color: var(--stop); }

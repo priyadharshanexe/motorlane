@@ -15,7 +15,8 @@ import { RentalCalendar } from "../RentalCalendar";
 import { useSession } from "../requests";
 import { Busy, Notice } from "../shared";
 import { photoTransition } from "./KeyTag";
-import { reducedMotion } from "./primitives";
+import { Odometer, reducedMotion } from "./primitives";
+import { Hud, useChapters } from "./world";
 
 export function VehicleDetail() {
   const { id } = useParams(), [params] = useSearchParams();
@@ -33,7 +34,9 @@ function Reservation({ id, params }: { id: string | undefined; params: URLSearch
     queryFn: ({ signal }) => api<{ days: number; total_price: string }>(`vehicles/${id}/quote/?${qp}`, { signal }),
   });
   const navigate = useNavigate(), session = useSession();
-  if (query.isPending) return <Busy />;
+  const root = useRef<HTMLDivElement>(null);
+  useChapters(root, [query.data?.id]);
+  if (query.isPending) return <div className="od-page-loading" style={{ minHeight: "100vh" }}><Busy /></div>;  // keeps the footer below the fold
   if (!query.data) return <Notice error={query.error} />;
   const v = query.data, ready = valid && Boolean(quote.data) && !quote.isError;
   const back = new URLSearchParams(params);
@@ -44,7 +47,7 @@ function Reservation({ id, params }: { id: string | undefined; params: URLSearch
   ];
   return (
     <MotionConfig reducedMotion="user">
-      <div className="od-detail">
+      <div className="od-detail" ref={root} data-chapter={`Lay-by · ${v.name}`}>
         <nav className="od-crumbs" aria-label="Breadcrumb">
           <Link to={`/vehicles${params.toString() ? "?" + params : ""}`} viewTransition>← Explore vehicles</Link>
           <span aria-current="page">{v.name}</span>
@@ -115,6 +118,10 @@ function Reservation({ id, params }: { id: string | undefined; params: URLSearch
               {start && end && end < start && <p className="od-error">Return must be on or after pickup.</p>}
               {ready && quote.data && <>
                 <div className="od-quote good"><strong>Available for your dates</strong></div>
+                <div className="od-reserve-total" aria-label={`Estimated total ₹${Number(quote.data.total_price).toLocaleString("en-IN")}`}>
+                  <small>Estimated total</small>
+                  <span className="od-reserve-odo"><span className="odo-sep">₹</span><Odometer value={Number(quote.data.total_price).toLocaleString("en-IN")} size="md" /></span>
+                </div>
                 <PriceBreakdown rate={v.price_per_day} days={quote.data.days} total={quote.data.total_price} estimate />
               </>}
               <Notice error={quote.error} />
@@ -125,6 +132,7 @@ function Reservation({ id, params }: { id: string | undefined; params: URLSearch
             <p className="od-fine">No payment now · Owner confirmation required</p>
           </form>
         </aside>
+        <Hud />
       </div>
     </MotionConfig>
   );
@@ -150,19 +158,78 @@ function Gallery({ vehicle }: { vehicle: Detail }) {
   };
   useEffect(() => { place(0); });  // eslint-disable-line react-hooks/exhaustive-deps
   const go = (next: number) => setIndex(Math.max(0, Math.min(photos.length - 1, next)));
+  // Zoom on the current photo: pinch with two fingers, or double-tap / double-click to toggle 2x. While zoomed,
+  // one finger (or the mouse) pans instead of swiping; zoom resets when the photo changes.
+  const images = useRef<(HTMLImageElement | null)[]>([]);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const zoom = useRef({ scale: 1, x: 0, y: 0, pinchFrom: 0, scaleFrom: 1, panX: 0, panY: 0, ox: 0, oy: 0 });
+  const applyZoom = (animated: boolean) => {
+    const img = images.current[index], z = zoom.current;
+    if (!img) return;
+    const box = viewport.current?.getBoundingClientRect();
+    if (box) {  // keep the zoomed photo covering the frame
+      const maxX = (box.width * (z.scale - 1)) / 2, maxY = (box.height * (z.scale - 1)) / 2;
+      z.x = Math.max(-maxX, Math.min(maxX, z.x)); z.y = Math.max(-maxY, Math.min(maxY, z.y));
+    }
+    img.style.transition = animated && !reducedMotion() ? "transform .3s cubic-bezier(.2, .8, .2, 1)" : "none";
+    img.style.transform = z.scale === 1 ? "" : `translate3d(${z.x}px, ${z.y}px, 0) scale(${z.scale})`;
+    viewport.current?.classList.toggle("zoomed", z.scale > 1);
+  };
+  useEffect(() => {
+    zoom.current = { ...zoom.current, scale: 1, x: 0, y: 0 };
+    images.current.forEach(img => { if (img) img.style.transform = ""; });
+    viewport.current?.classList.remove("zoomed");
+  }, [index]);
+  const toggleZoom = (event: React.MouseEvent) => {
+    const z = zoom.current, box = viewport.current!.getBoundingClientRect();
+    if (z.scale > 1) { z.scale = 1; z.x = 0; z.y = 0; }
+    else { z.scale = 2; z.x = -(event.clientX - box.left - box.width / 2); z.y = -(event.clientY - box.top - box.height / 2); }
+    applyZoom(true);
+  };
+  const distance = () => {
+    const [a, b] = [...pointers.current.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
   const onDown = (event: React.PointerEvent) => {
-    if (photos.length < 2 || (event.pointerType === "mouse" && event.button !== 0)) return;
-    dragging.current = { x: event.clientX, t: performance.now(), dx: 0, id: event.pointerId };
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    const z = zoom.current;
+    if (pointers.current.size === 2) {  // a second finger: start a pinch, cancel any swipe
+      dragging.current = null; place(0);
+      z.pinchFrom = distance(); z.scaleFrom = z.scale;
+      return;
+    }
+    if (z.scale > 1) { z.panX = event.clientX; z.panY = event.clientY; z.ox = z.x; z.oy = z.y; return; }
+    if (photos.length < 2) return;
+    dragging.current = { x: event.clientX, t: performance.now(), dx: 0, id: event.pointerId };
   };
   const onMove = (event: React.PointerEvent) => {
+    if (pointers.current.has(event.pointerId)) pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const z = zoom.current;
+    if (pointers.current.size === 2 && z.pinchFrom) {
+      z.scale = Math.max(1, Math.min(3, z.scaleFrom * (distance() / z.pinchFrom)));
+      applyZoom(false);
+      return;
+    }
+    if (z.scale > 1 && pointers.current.size === 1) {
+      z.x = z.ox + (event.clientX - z.panX); z.y = z.oy + (event.clientY - z.panY);
+      applyZoom(false);
+      return;
+    }
     const d = dragging.current;
     if (!d || d.id !== event.pointerId) return;
     d.dx = event.clientX - d.x;
     const atEdge = (index === 0 && d.dx > 0) || (index === photos.length - 1 && d.dx < 0);
     place(atEdge ? d.dx * 0.25 : d.dx, false);  // rubber-band at the first and last photo
   };
-  const onUp = () => {
+  const onUp = (event: React.PointerEvent) => {
+    pointers.current.delete(event.pointerId);
+    const z = zoom.current;
+    if (z.pinchFrom) {
+      if (pointers.current.size < 2) { z.pinchFrom = 0; if (z.scale < 1.05) { z.scale = 1; z.x = 0; z.y = 0; } applyZoom(true); }
+      return;
+    }
     const d = dragging.current;
     dragging.current = null;
     if (!d) return;
@@ -180,9 +247,10 @@ function Gallery({ vehicle }: { vehicle: Detail }) {
         if (event.key === "ArrowLeft") { event.preventDefault(); go(index - 1); }
       }}>
       <div className="od-gallery-viewport" ref={viewport} style={{ aspectRatio: ratio }}>
-        <div className="od-gallery-track" ref={track} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+        <div className="od-gallery-track" ref={track} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+          onDoubleClick={toggleZoom}>
           {photos.map((photo, i) => (
-            <img key={photo.large + i} src={photo.large} srcSet={`${photo.small} 400w, ${photo.large} 1200w`}
+            <img key={photo.large + i} ref={el => { images.current[i] = el; }} src={photo.large} srcSet={`${photo.small} 400w, ${photo.large} 1200w`}
               sizes="(max-width: 900px) 100vw, 60vw" alt={i === 0 ? vehicle.name : `${vehicle.name}, photo ${i + 1}`}
               draggable={false} loading={i === 0 ? "eager" : "lazy"} decoding="async"
               {...(i === 0 ? { fetchPriority: "high" as const } : {})}

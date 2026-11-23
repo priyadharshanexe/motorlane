@@ -2,48 +2,6 @@
 .lab { position: relative; isolation: isolate; }
 .lab-main, .lab-bar { position: relative; z-index: 1; }
 
-/* backdrop: grain, near margin lanes and kerbs, far signs and km posts, headlight sweep */
-.lab-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.lab-grain { position: absolute; inset: 0; opacity: .6;
-  background-image: radial-gradient(#ffffff0f 1px, transparent 1.2px), radial-gradient(#00000055 1px, transparent 1.2px);
-  background-size: 5px 5px, 7px 7px; background-position: 0 0, 2px 3px; }
-.lab[data-theme="light"] .lab-grain { background-image: radial-gradient(#00000012 1px, transparent 1.2px), radial-gradient(#ffffff90 1px, transparent 1.2px); }
-.lab-near, .lab-far { position: absolute; left: 0; right: 0; top: 0; height: calc(100% + 1400px); will-change: transform; }
-.lab-margin-lane { position: absolute; top: 0; bottom: 0; width: 6px;
-  background: repeating-linear-gradient(to bottom, var(--lane) 0 60px, transparent 60px 160px); opacity: .35; }
-.lab-margin-lane.left { left: 24px; } .lab-margin-lane.right { right: 24px; }
-.lab-kerb { position: absolute; top: 0; bottom: 0; width: 12px;
-  background: repeating-linear-gradient(to bottom, #E14B4B 0 40px, #EDEAE3 40px 80px); opacity: .28; }
-.lab-kerb.left { left: 0; } .lab-kerb.right { right: 0; }
-.lab-far-item { position: absolute; opacity: .18; }
-/* Background props live only in the page margins (never under content): small, and hidden where margins are narrow. */
-.lab-far-item.left { left: 16px; } .lab-far-item.right { right: 16px; }
-.lab-far-item { transform: scale(.6); transform-origin: 0 0; }
-.lab-far-item.right { transform-origin: 100% 0; }
-@media (max-width: 1440px) { .lab-far { display: none; } }
-.lab-kmpost { display: grid; place-items: center; align-content: center; width: 46px; height: 64px; background: var(--chalk); color: var(--tarmac);
-  border-radius: 23px 23px 4px 4px; font-weight: 700; font-size: 15px; line-height: 1; }
-.lab .lab-kmpost small { color: inherit; font-size: 9px; letter-spacing: 0; }
-.lab-sign { display: grid; place-items: center; width: 64px; height: 64px; }
-.lab-sign-speed { border-radius: 50%; border: 8px solid #E14B4B; background: var(--chalk); color: #16181B; font-weight: 700; font-size: 20px; }
-.lab-sign-curve { background: var(--lane); transform: rotate(45deg) scale(.8); border: 4px solid #16181B; }
-.lab-sweep { position: absolute; top: 0; bottom: 0; left: 0; width: 45vw; opacity: 0;
-  background: linear-gradient(100deg, transparent 20%, #FFF4C833 50%, transparent 80%); }
-.lab[data-theme="light"] .lab-sweep { background: linear-gradient(100deg, transparent 20%, #FFFFFFbb 50%, transparent 80%); }
-
-/* HUD */
-.lab-hud { position: fixed; z-index: 5; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 16px;
-  padding: 8px 18px; background: color-mix(in srgb, var(--raised) 90%, transparent); border: 1px solid var(--kerb); border-radius: 999px;
-  font-size: 13px; white-space: nowrap; }
-.lab-hud-pin { width: 10px; height: 10px; border-radius: 50%; background: var(--progress); box-shadow: 0 0 0 4px #3DDC9733; }
-.lab-hud-chapter { font: 700 13px "Archivo", sans-serif; font-stretch: 112%; text-transform: uppercase; letter-spacing: .06em; min-width: 210px; }
-.lab-hud-gauge svg { width: 26px; height: 26px; display: block; }
-.lab-hud-gauge .arc { fill: none; stroke: var(--kerb); stroke-width: 3; }
-.lab-hud-gauge .needle, .lab-speedo .needle { stroke: var(--lane); stroke-width: 3; stroke-linecap: round; transform-box: view-box; transform-origin: 0 0; }
-.lab-hud-speed { color: var(--lane-text); font-weight: 700; }
-.lab-hud-odo { display: inline-flex; gap: 6px; align-items: center; }
-.lab .lab-hud-odo small { letter-spacing: 0; display: inline; }
-
 /* trip meter (frame-driven) */
 .tripmeter { display: inline-flex; gap: 2px; }
 .tripmeter { --h: 20px; }
@@ -165,11 +123,9 @@
   .lab-dash { flex-wrap: wrap; bottom: 70px; }
   .lab-speedo { display: none; }
   .lab .lab-how-stops { grid-template-columns: 1fr 1fr; }
-  .lab-hud-chapter { min-width: 0; }
-  .lab-hud-gauge, .lab-far { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .lab-streaks, .lab-sweep { display: none; }
+  .lab-streaks { display: none; }
   .lab .lab-hero { height: auto; min-height: 0; }
   .lab-hero-stage { position: relative; }
 }
@@ -188,7 +144,6 @@
 .lab[data-theme="light"] .tripmeter-wheel.tenths { background: var(--lane); box-shadow: inset 0 0 0 1px #D9A400; }
 .lab[data-theme="light"] .odo-lg .odo-strip span { color: var(--lane-text); }
 .lab[data-theme="light"] .odo-lg .odo-wheel::after { background: linear-gradient(#0000000f, transparent 30%, transparent 70%, #0000000f); }
-.lab[data-theme="light"] .lab-hud { box-shadow: 0 6px 20px -12px #0004; }
 /* Roads drawn in SVG/CSS: sunlit asphalt, white-ish shoulders. */
 .lab[data-theme="light"] .lab-how-ghost, .lab[data-theme="light"] .lab-ghost-lane { stroke: #E6E2D8; }
 .lab[data-theme="light"] .lab-track::after { border-top-color: #FFFFFF88; }
@@ -205,8 +160,6 @@
 .lab .lab-main { padding: 0; margin: 0; }  /* the app's global main padding would leave a band above the scene */
 .lab .lab-hero h1 { font-size: clamp(44px, min(4.4vw, 8.2vh), 76px) !important; }
 .lab .lab-dash { bottom: 32px; }
-.lab-hud { transition: opacity .35s var(--ease-out), transform .35s var(--ease-out); }
-.lab-hud.away { opacity: 0; transform: translate(-50%, 24px); pointer-events: none; }
 @media (max-height: 800px) { .lab .lab-hero-copy p { margin-top: 18px; } .lab-speedo { transform: scale(.85); transform-origin: 0 100%; } }
 .lab[data-theme="light"] .lab-bar { background: none; }
 .lab[data-theme="light"] .lab-bar .lab-note { background: rgba(248, 245, 238, .85); padding: 4px 10px; border-radius: 999px; color: #3E4249; }

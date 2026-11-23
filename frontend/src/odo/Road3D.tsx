@@ -132,6 +132,8 @@ const TAMIL: Record<string, string> = {
   Trichy: "திருச்சி", Salem: "சேலம்", Erode: "ஈரோடு", Tirunelveli: "திருநெல்வேலி", Vellore: "வேலூர்",
   Thanjavur: "தஞ்சாவூர்", Kanyakumari: "கன்னியாகுமரி", Tiruppur: "திருப்பூர்", Thoothukudi: "தூத்துக்குடி",
   Dindigul: "திண்டுக்கல்", Hosur: "ஓசூர்", Kanchipuram: "காஞ்சிபுரம்", Puducherry: "புதுச்சேரி", Ooty: "ஊட்டி",
+  // The page's own chapters, for the "next on this road" gantry.
+  Catalog: "வாகனப் பட்டியல்", "How it works": "செயல்படும் விதம்", "Your trip": "உங்கள் பயணம்",
 };
 const SIGN_FALLBACK = ["Madurai", "Coimbatore", "Tiruchirappalli", "Salem", "Chennai", "Erode", "Tirunelveli", "Vellore"];
 const SIGN_GREEN = "#0B6B3A";
@@ -246,10 +248,13 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
     if (!fontsReady || new URLSearchParams(location.search).has("nosigns")) return null;  // ?nosigns: A/B performance checks
     const towns = [...new Set([...signKey.split("|").filter(Boolean), ...SIGN_FALLBACK])].slice(0, 9);
     const km = (town: string, i: number) => 18 + ((town.length * 41 + i * 67) % 260);
-    const gantries = [0, 1, 2].map(set => {
+    // The first gantry you meet signs the page itself: the chapters ahead, straight on.
+    const chapters = signTextures(1536, 560, "NEXT ON THIS ROAD", [["Catalog", 1, "up"], ["How it works", 2, "up"], ["Your trip", 3, "up"]]);
+    const towns3 = [0, 1, 2].map(set => {
       const pick = [0, 1, 2].map(i => towns[(set * 3 + i) % towns.length]);
       return signTextures(1536, 560, "NH 44 · TAMIL NADU", [[pick[0], km(pick[0], 0), "left"], [pick[1], km(pick[1], 1), "up"], [pick[2], km(pick[2], 2), "right"]]);
     });
+    const gantries = [chapters, ...towns3];
     const boards = towns.slice(0, 4).map((town, i) => signTextures(640, 400, "", [[town, km(town, i + 5), i % 2 ? "up" : "right"]]));
     return { gantries, boards };
   }, [fontsReady, signKey]);

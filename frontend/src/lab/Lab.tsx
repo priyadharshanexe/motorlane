@@ -13,6 +13,8 @@ import { api } from "../api";
 import type { Vehicle } from "../api";
 import { drive, gsap, IDLE_KMH, MAX_KMH, onDrive, ScrollTrigger, startDrive, stopDrive } from "../odo/drive";
 import { canRun3D, Odometer, reducedMotion, scrolling, TripMeter, useOnce } from "../odo/primitives";
+import { TripChapter } from "../odo/TripChapter";
+import { Backdrop, Hud, useChapters } from "../odo/world";
 import "./lab.css";
 import "./lab-v2.css";
 
@@ -30,27 +32,7 @@ export default function Lab() {
     startDrive();
     return () => { stopDrive(); link.remove(); };
   }, []);
-  // Each chapter announces itself to the HUD's GPS readout as it scrolls into the middle of the screen.
-  useLayoutEffect(() => {
-    const ctx = gsap.context(() => {
-      gsap.utils.toArray<HTMLElement>("[data-chapter]").forEach(section => {
-        ScrollTrigger.create({ trigger: section, start: "top 55%", end: "bottom 55%",
-          onToggle: self => { if (self.isActive) drive.chapter = section.dataset.chapter ?? ""; } });
-      });
-    }, root);
-    // Catalog data and images arrive after first layout and push later sections down; re-measure every trigger
-    // whenever the page height changes so scrubbed animations start where they should (not already finished).
-    let timer = 0, lastHeight = 0;
-    const observer = new ResizeObserver(entries => {
-      const height = Math.round(entries[0].contentRect.height);
-      if (height === lastHeight) return;
-      lastHeight = height;
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => ScrollTrigger.refresh(), 120);
-    });
-    if (root.current) observer.observe(root.current);
-    return () => { observer.disconnect(); window.clearTimeout(timer); ctx.revert(); };
-  }, []);
+  useChapters(root);
   return (
     <div className="lab" data-theme={theme} ref={root}>
       <Backdrop />
@@ -66,10 +48,10 @@ export default function Lab() {
         <Hero light={theme === "light"} />
         <Catalog />
         <HowItWorks />
-        <Trip />
+        <TripChapter />
         <Finish />
       </main>
-      <Hud />
+      <Hud hero=".lab-hero" />
     </div>
   );
 }
@@ -93,82 +75,6 @@ function useVehicles(type: string) {
     queryKey: ["lab-vehicles", type],
     queryFn: () => api<{ count: number; results: Vehicle[] }>(`vehicles/?${new URLSearchParams(type ? { type } : {})}`),
   });
-}
-
-// ----- Backdrop and HUD -----------------------------------------------------------------------
-
-/** The page's "world": tarmac grain, margin lane markings and kerb hatching at two depths, road signs and
- *  kilometre posts in the far layer, and a headlight sweep when you accelerate hard. Fixed behind content. */
-function Backdrop() {
-  const near = useRef<HTMLDivElement>(null), far = useRef<HTMLDivElement>(null), sweep = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (reducedMotion()) return;
-    let sweeping = false;
-    return onDrive(() => {
-      const travelled = drive.km * 9000;  // the margins scroll with distance driven, not just page position
-      if (near.current) near.current.style.transform = `translate3d(0, ${(-(travelled % 160)).toFixed(1)}px, 0)`;
-      if (far.current) far.current.style.transform = `translate3d(0, ${(-((travelled * 0.35) % 1400)).toFixed(1)}px, 0)`;
-      if (!sweeping && drive.throttle > 0.55 && sweep.current) {
-        sweeping = true;
-        gsap.fromTo(sweep.current, { xPercent: -60, opacity: 0 }, {
-          xPercent: 160, opacity: 1, duration: 1.1, ease: "power2.inOut",
-          onComplete: () => { gsap.set(sweep.current, { opacity: 0 }); window.setTimeout(() => { sweeping = false; }, 1600); },
-        });
-      }
-    });
-  }, []);
-  return (
-    <div className="lab-backdrop" aria-hidden="true">
-      <div className="lab-grain" />
-      <div className="lab-far" ref={far}>
-        {Array.from({ length: 8 }, (_, i) => (
-          <div className={`lab-far-item ${i % 2 ? "right" : "left"}`} key={i} style={{ top: `${i * 175 + 60}px` }}>
-            {i % 3 === 0 ? <span className="lab-kmpost mono">{120 + i * 4}<small>km</small></span>
-              : i % 3 === 1 ? <span className="lab-sign lab-sign-curve" /> : <span className="lab-sign lab-sign-speed mono">60</span>}
-          </div>
-        ))}
-      </div>
-      <div className="lab-near" ref={near}>
-        <span className="lab-margin-lane left" /><span className="lab-margin-lane right" />
-        <span className="lab-kerb left" /><span className="lab-kerb right" />
-      </div>
-      <div className="lab-sweep" ref={sweep} />
-    </div>
-  );
-}
-
-/** A fixed GPS-style strip: current chapter, speed with a needle, and the trip meter. */
-function Hud() {
-  const chapter = useRef<HTMLSpanElement>(null), speed = useRef<HTMLSpanElement>(null), needle = useRef<SVGLineElement>(null);
-  const hud = useRef<HTMLDivElement>(null);
-  // The hero has its own speedometer and trip meter, so the HUD stays out of the way there and slides in once the
-  // hero has mostly scrolled away.
-  useLayoutEffect(() => {
-    const trigger = ScrollTrigger.create({ trigger: ".lab-hero", start: "top bottom", end: "bottom 55%",  // starts before scroll 0, so the very top counts
-      onToggle: self => hud.current?.classList.toggle("away", self.isActive) });
-    hud.current?.classList.toggle("away", window.scrollY < trigger.end);
-    return () => trigger.kill();
-  }, []);
-  useEffect(() => {
-    let shown = "", shownSpeed = -1;
-    return onDrive(() => {
-      if (chapter.current && shown !== drive.chapter) { shown = drive.chapter; chapter.current.textContent = shown; }
-      const rounded = Math.round(drive.kmh);
-      if (speed.current && rounded !== shownSpeed) { shownSpeed = rounded; speed.current.textContent = String(rounded).padStart(3, "0"); }
-      if (needle.current) needle.current.style.transform = `rotate(${(-120 + (drive.kmh / MAX_KMH) * 240).toFixed(1)}deg)`;
-    });
-  }, []);
-  return (
-    <div className="lab-hud away" ref={hud} role="status" aria-label="Trip readout">
-      <span className="lab-hud-pin" aria-hidden="true" />
-      <span className="lab-hud-chapter" ref={chapter}>Start</span>
-      <span className="lab-hud-gauge" aria-hidden="true">
-        <svg viewBox="-20 -20 40 40"><path d="M-14 8 A16 16 0 1 1 14 8" className="arc" /><line ref={needle} x1="0" y1="0" x2="0" y2="-13" className="needle" /></svg>
-      </span>
-      <span className="lab-hud-speed mono"><span ref={speed}>000</span> km/h</span>
-      <span className="lab-hud-odo"><TripMeter digits={5} /> <small>km</small></span>
-    </div>
-  );
 }
 
 // ----- Chapter 1: the hero drives ---------------------------------------------------------------
@@ -488,138 +394,6 @@ function StopIcon({ kind }: { kind: string }) {
 }
 
 // ----- Chapter 4: the trip (timeline road + time road + price) ---------------------------------
-
-// One sample booking, consistent everywhere: requested and approved on 22 Nov, keys handed over on 23 Nov once the
-// pickup window opens (an hour before the slot), return the same day. Keys and return follow the slot you drag.
-const slotTime = (slot: number) => `${String(Math.floor(slot / 2)).padStart(2, "0")}:${slot % 2 ? "30" : "00"}`;
-const RENTAL_SLOTS = 6;  // 3 hours
-
-function Trip() {
-  const [pickup, setPickup] = useState(CLEANING_UNTIL + 2);
-  const [h, m] = slotTime(pickup).split(":").map(Number);
-  const keys = `${String(h).padStart(2, "0")}:${String(m + 4).padStart(2, "0")}`;  // handed over 4 minutes into the slot
-  const stops = [
-    { label: "You requested", time: "22 Nov · 10:23", color: "pending" },
-    { label: "Asha approved", time: "22 Nov · 11:02", color: "confirmed", note: "Paid ₹1,650 · demo payment" },
-    { label: "Keys handed over", time: `23 Nov · ${keys}`, color: "progress" },
-    { label: "Return", time: `23 Nov · ${slotTime(pickup + RENTAL_SLOTS)} · ₹1,000 deposit back`, color: "ghost" },
-  ];
-  return (
-    <section className="lab-trip" data-chapter="Stage 4 · Your trip">
-      <div className="lab-trip-road"><TimelineRoad stops={stops} /></div>
-      <TripTicket pickup={pickup} setPickup={setPickup} />
-    </section>
-  );
-}
-
-/** The timeline road is scrubbed by scroll: it draws as the section rises from 75% to 35% of the viewport, each
- *  stop lights up when the line reaches it, and scrolling back up retracts it. Nothing plays on load. */
-function TimelineRoad({ stops }: { stops: { label: string; time: string; color: string; note?: string }[] }) {
-  const path = useRef<SVGPathElement>(null), car = useRef<SVGGElement>(null), wrapper = useRef<HTMLDivElement>(null);
-  const [reached, setReached] = useState(0);
-  useLayoutEffect(() => {
-    const line = path.current!, marker = car.current!, total = line.getTotalLength();
-    const marks = [0.02, 0.27, 0.6, 0.97];
-    let shown = -1;
-    const render = (progress: number) => {
-      const length = total * progress;
-      line.style.strokeDasharray = `${length.toFixed(1)} ${total.toFixed(1)}`;
-      const point = line.getPointAtLength(length);
-      marker.setAttribute("transform", `translate(${point.x.toFixed(1)} ${point.y.toFixed(1)})`);
-      const count = marks.filter(mark => progress >= mark).length;
-      if (count !== shown) { shown = count; setReached(count); }
-    };
-    if (reducedMotion()) { render(1); return; }
-    render(0);
-    // The road's drawn tip follows the reader's eye line (60% down the viewport): drawing starts when the top of the
-    // road reaches it and finishes as the Return stop does, whatever the viewport height.
-    const svg = wrapper.current!.querySelector("svg");
-    const trigger = ScrollTrigger.create({ trigger: svg, start: "top 60%", end: "bottom 60%", scrub: 0.6,
-      onUpdate: self => render(self.progress) });
-    return () => trigger.kill();
-  }, []);
-  const d = "M60 20 C 60 160, 100 200, 100 300 S 60 440, 60 560 S 100 680, 100 740";
-  return (
-    <div className="lab-timeline" ref={wrapper}>
-      <svg viewBox="0 0 160 760" aria-hidden="true">
-        <path d={d} className="lab-asphalt" />
-        <path d={d} className="lab-ghost-lane" />
-        <path d={d} className="lab-drawn-lane" ref={path} />
-        <g ref={car}><circle r="11" className="lab-car" /></g>
-      </svg>
-      <ol>
-        {stops.map((stop, index) => (
-          <li key={stop.label} className={index < reached ? "reached" : ""} style={{ top: `${[20, 210, 430, 650][index]}px` }}>
-            <span className={`lab-dot lab-${stop.color}`} />
-            <div><b>{stop.label}</b><small className="mono">{stop.time}</small>{stop.note && <span className="lab-tag-note">{stop.note}</span>}</div>
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
-}
-
-// Time road for 23 Nov: an earlier rental until 10:00, then a 2-hour cleaning window.
-const BOOKED_UNTIL = 10 * 2, CLEANING_UNTIL = 12 * 2, DAY = 48;
-
-function TripTicket({ pickup, setPickup }: { pickup: number; setPickup: (slot: number) => void }) {
-  const [bump, setBump] = useState(false);
-  const [counted, setCounted] = useState(false);
-  const length = RENTAL_SLOTS;
-  const track = useRef<HTMLDivElement>(null);
-  const hours = useMemo(() => length / 2, [length]);
-  const price = 650 * Math.max(1, Math.ceil(hours / 24));
-  const ticket = useOnce<HTMLDivElement>(() => setCounted(true), "top 65%");  // the price rolls up when you arrive
-  const place = (slot: number) => {
-    const clamped = Math.max(0, Math.min(DAY - length, slot));
-    if (clamped < CLEANING_UNTIL) {
-      setBump(true);
-      window.setTimeout(() => setBump(false), 450);
-      setPickup(CLEANING_UNTIL);
-      return;
-    }
-    setPickup(clamped);
-  };
-  const fromPointer = (event: ReactPointerEvent) => {
-    const box = track.current!.getBoundingClientRect();
-    place(Math.round(((event.clientX - box.left) / box.width) * DAY));
-  };
-  const time = (slot: number) => `${String(Math.floor(slot / 2)).padStart(2, "0")}:${slot % 2 ? "30" : "00"}`;
-  const money = (value: number) => counted ? value.toLocaleString("en-IN") : "0,000".slice(-value.toLocaleString("en-IN").length);
-  return (
-    <div className="lab-ticket" ref={ticket}>
-      <h2>Honda Activa 6G</h2>
-      <span className="lab-status">● On the road</span>
-      <div className="lab-slots">
-        <div><small>Pickup</small><span className="lab-slot-date">23 Nov ·</span> <Odometer value={time(pickup)} size="md" /></div>
-        <div className="lab-right"><small>Return</small><span className="lab-slot-date">23 Nov ·</span> <Odometer value={time(pickup + length)} size="md" /></div>
-      </div>
-      <div className="lab-breakdown">
-        <div className="lab-row lab-weekend"><span>1 weekend day × ₹650</span><span className="mono">₹{price.toLocaleString("en-IN")}</span></div>
-        <div className="lab-row lab-deposit"><span>Refundable deposit</span><span className="mono">₹1,000</span></div>
-        <div className="lab-total"><span>Due at payment</span><span className="lab-total-amount"><span className="odo-sep">₹</span><Odometer value={money(price + 1000)} size="md" /></span></div>
-      </div>
-      <div className="lab-timeroad">
-        <small>Time road · 23 Nov · drag the car (or use ← →)</small>
-        <div className={`lab-track${bump ? " bump" : ""}`} ref={track}
-          onPointerDown={event => { track.current!.setPointerCapture(event.pointerId); fromPointer(event); }}
-          onPointerMove={event => { if (event.buttons) fromPointer(event); }}>
-          <span className="lab-booked" style={{ width: `${(BOOKED_UNTIL / DAY) * 100}%` }} title="Booked until 10:00" />
-          <span className="lab-cleaning" style={{ left: `${(BOOKED_UNTIL / DAY) * 100}%`, width: `${((CLEANING_UNTIL - BOOKED_UNTIL) / DAY) * 100}%` }} title="Cleaning window" />
-          <span className="lab-mine" style={{ left: `${(pickup / DAY) * 100}%`, width: `${(length / DAY) * 100}%` }} />
-          <button className="lab-marker" style={{ left: `${(pickup / DAY) * 100}%` }} aria-label={`Pickup ${time(pickup)}`}
-            onKeyDown={event => {
-              if (event.key === "ArrowRight") place(pickup + 1);
-              if (event.key === "ArrowLeft") place(pickup - 1);
-            }} />
-        </div>
-        <div className="lab-ticks mono"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
-        <p className="lab-legend"><span className="lab-key lab-key-booked" /> Booked until 10:00 <span className="lab-key lab-key-cleaning" /> Cleaning window 10:00–12:00 <span className="lab-key lab-key-mine" /> Your rental</p>
-        <p className={`lab-earliest${bump ? " show" : ""}`}>Cleaning window after the previous rental: earliest pickup 12:00.</p>
-      </div>
-    </div>
-  );
-}
 
 // ----- Chapter 5: the toll gate -----------------------------------------------------------------
 

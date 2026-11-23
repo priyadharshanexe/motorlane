@@ -1,0 +1,47 @@
+/* The shared "world": backdrop and HUD. Works under any root that defines the Odometer tokens and data-theme
+   (the real pages' .od-app and the lab's .lab). */
+.od-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.od-grain { position: absolute; inset: 0; opacity: .6;
+  background-image: radial-gradient(#ffffff0f 1px, transparent 1.2px), radial-gradient(#00000055 1px, transparent 1.2px);
+  background-size: 5px 5px, 7px 7px; background-position: 0 0, 2px 3px; }
+[data-theme="light"] .od-grain { background-image: radial-gradient(#00000012 1px, transparent 1.2px), radial-gradient(#ffffff90 1px, transparent 1.2px); }
+.od-near, .od-far { position: absolute; left: 0; right: 0; top: 0; height: calc(100% + 1400px); will-change: transform; }
+.od-margin-lane { position: absolute; top: 0; bottom: 0; width: 6px; opacity: .35;
+  background: repeating-linear-gradient(to bottom, var(--lane) 0 60px, transparent 60px 160px); }
+.od-margin-lane.left { left: 24px; } .od-margin-lane.right { right: 24px; }
+.od-kerb { position: absolute; top: 0; bottom: 0; width: 12px; opacity: .28;
+  background: repeating-linear-gradient(to bottom, #E14B4B 0 40px, #EDEAE3 40px 80px); }
+.od-kerb.left { left: 0; } .od-kerb.right { right: 0; }
+/* Far props live only in the margins, never under content; hidden where the margins are narrow. */
+.od-far-item { position: absolute; opacity: .18; transform: scale(.6); transform-origin: 0 0; }
+.od-far-item.left { left: 16px; } .od-far-item.right { right: 16px; transform-origin: 100% 0; }
+@media (max-width: 1440px) { .od-far { display: none; } }
+.od-kmpost { display: grid; place-items: center; align-content: center; width: 46px; height: 64px; background: var(--chalk); color: var(--tarmac);
+  border-radius: 23px 23px 4px 4px; font-weight: 700; font-size: 15px; line-height: 1; }
+.od-kmpost small { color: inherit; font-size: 9px; letter-spacing: 0; display: block; }
+.od-sign { display: grid; place-items: center; width: 64px; height: 64px; }
+.od-sign-speed { border-radius: 50%; border: 8px solid #E14B4B; background: var(--chalk); color: #16181B; font-weight: 700; font-size: 20px; }
+.od-sign-curve { background: var(--lane); transform: rotate(45deg) scale(.8); border: 4px solid #16181B; }
+.od-sweep { position: absolute; top: 0; bottom: 0; left: 0; width: 45vw; opacity: 0;
+  background: linear-gradient(100deg, transparent 20%, #FFF4C833 50%, transparent 80%); }
+[data-theme="light"] .od-sweep { background: linear-gradient(100deg, transparent 20%, #FFFFFFbb 50%, transparent 80%); }
+
+.od-hud { position: fixed; z-index: 15; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 16px;
+  padding: 8px 18px; background: color-mix(in srgb, var(--raised) 94%, transparent); border: 1px solid var(--kerb); border-radius: 999px;
+  font-size: 13px; white-space: nowrap; color: var(--chalk); transition: opacity .35s ease, transform .35s ease; }
+[data-theme="light"] .od-hud { box-shadow: 0 6px 20px -12px #0004; }
+.od-hud.away { opacity: 0; transform: translate(-50%, 24px); pointer-events: none; }
+.od-hud-pin { width: 10px; height: 10px; border-radius: 50%; background: var(--progress); box-shadow: 0 0 0 4px #3DDC9733; }
+.od-hud-chapter { font: 700 13px "Archivo Variable", "Archivo", sans-serif; font-stretch: 112%; text-transform: uppercase; letter-spacing: .06em; min-width: 210px; }
+.od-hud-gauge svg { width: 26px; height: 26px; display: block; }
+.od-hud-gauge .arc { fill: none; stroke: var(--kerb); stroke-width: 3; }
+.od-hud-gauge .needle { stroke: var(--lane); stroke-width: 3; stroke-linecap: round; transform-box: view-box; transform-origin: 0 0; }
+.od-hud-speed { color: var(--lane-text); font-weight: 700; }
+.od-hud-odo { display: inline-flex; gap: 6px; align-items: center; }
+.od-hud-odo small { letter-spacing: 0; display: inline; font-size: 12px; color: var(--dust); }
+@media (max-width: 760px) {
+  .od-hud { gap: 10px; padding: 6px 12px; bottom: 10px; }
+  .od-hud-chapter { min-width: 0; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+  .od-hud-gauge { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .od-sweep { display: none; } .od-hud { transition: none; } }

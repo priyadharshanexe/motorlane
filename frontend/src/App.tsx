@@ -18,7 +18,7 @@ const Catalog = lazy(() => import("./odo/Catalog").then(m => ({ default: m.Catal
 const VehicleDetail = lazy(() => import("./odo/VehicleDetail").then(m => ({ default: m.VehicleDetail })));
 
 function OdoShell() {
-  return <Suspense fallback={<div className="od-boot" />}><OdoLayout><Suspense fallback={null}><Outlet /></Suspense></OdoLayout></Suspense>;
+  return <Suspense fallback={<div className="od-boot" />}><OdoLayout><Suspense fallback={<div className="od-page-loading" style={{ minHeight: "100vh" }} />}><Outlet /></Suspense></OdoLayout></Suspense>;
 }
 
 export default function App() {

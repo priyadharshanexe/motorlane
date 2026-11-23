@@ -1,7 +1,7 @@
 // A listing as a key tag: punched hole, photo, number plate, name, specs and the day rate. It swings on its hole
 // when a person moves the pointer onto it (never because the page scrolled under the cursor), and its photo is a
 // named View Transition so it morphs straight into the vehicle page.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { Link } from "react-router-dom";
 import type { Vehicle } from "../api";
@@ -19,6 +19,17 @@ export function KeyTag({ vehicle, index = 0, params = "", priority = false }: {
   const ref = useRef<HTMLElement>(null), armed = useRef(true);
   const [preview, setPreview] = useState(false);
   const url = `/vehicles/${vehicle.id}${params ? "?" + params : ""}`;
+  // Lane-wipe: the photo is wiped in from the left once it has actually loaded (instantly if it is cached).
+  const media = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = media.current, img = box?.querySelector("img");
+    if (!box) return;
+    if (!img || img.complete || reducedMotion()) { box.classList.add("loaded"); return; }
+    const done = () => box.classList.add("loaded");
+    img.addEventListener("load", done, { once: true });
+    img.addEventListener("error", done, { once: true });
+    return () => { img.removeEventListener("load", done); img.removeEventListener("error", done); };
+  }, []);
   const tilt = (event: ReactPointerEvent) => {
     const tag = ref.current!;
     if (event.pointerType !== "mouse" || scrolling.active) return;
@@ -46,7 +57,7 @@ export function KeyTag({ vehicle, index = 0, params = "", priority = false }: {
       onAnimationEnd={event => event.currentTarget.classList.remove("swinging")}
       style={{ "--hang": `${HANG[index % HANG.length]}deg` } as CSSProperties}>
       <span className="od-tag-hole" aria-hidden="true" />
-      <div className="od-tag-media">
+      <div className="od-tag-media od-wipe" ref={media}>
         <Link to={url} viewTransition aria-label={`View ${vehicle.name}`} tabIndex={-1}
           style={{ viewTransitionName: photoTransition(vehicle.id) } as CSSProperties}>
           <Photo vehicle={vehicle} priority={priority} />

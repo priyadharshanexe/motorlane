@@ -10,9 +10,10 @@ import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/700.css";
 import { useSession } from "../requests";
 import RouteErrorBoundary from "../RouteErrorBoundary";
-import { gsap, getLenis, ScrollTrigger, startDrive, stopDrive } from "./drive";
+import { drive, gsap, getLenis, MAX_KMH, onDrive, ScrollTrigger, startDrive, stopDrive } from "./drive";
 import { reducedMotion } from "./primitives";
 import { ThemeProvider, useTheme } from "./theme";
+import { Backdrop } from "./world";
 import "./odo.css";
 
 export function OdoLayout({ children }: { children: ReactNode }) {
@@ -67,6 +68,7 @@ function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="od-app" data-theme={theme} data-motion={reducedMotion() ? "reduced" : "full"}>
       <a className="od-skip" href="#main">Skip to content</a>
+      <Backdrop />
       <header className="od-header" ref={header}>
         <Link className="od-brand" to="/" viewTransition><LaneMark /> <span>MOTORLANE</span></Link>
         <nav className="od-nav" aria-label="Main navigation">
@@ -105,32 +107,53 @@ function Shell({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main id="main" className="od-main">
-        <RouteErrorBoundary key={key}>{children}</RouteErrorBoundary>
+        {/* keyed by path, not location.key: changing filters must not remount the page (focus, FLIP reflow) */}
+        <RouteErrorBoundary key={pathname}>{children}</RouteErrorBoundary>
       </main>
       <TollGate />
     </div>
   );
 }
 
-/** The page ends at a toll gate: the barrier lifts as you roll up to it (scrubbed) and the light turns green. */
+/** The end of the drive: the road runs in from the left to a toll gate. As you scroll down to it (scrubbed) the
+ *  car rolls up and waits, the barrier lifts, the light turns green and the car drives through. The centre line
+ *  flows at the shared drive speed. */
 function TollGate() {
   const section = useRef<HTMLElement>(null), arm = useRef<SVGGElement>(null), light = useRef<SVGCircleElement>(null);
+  const car = useRef<SVGGElement>(null), lane = useRef<SVGPathElement>(null);
   const { pathname } = useLocation();
   useLayoutEffect(() => {
-    if (reducedMotion()) { gsap.set(arm.current, { rotation: -78, svgOrigin: "60 120" }); light.current?.classList.add("go"); return; }
+    const place = (progress: number) => {
+      // 0-0.55: roll up to the barrier; 0.55-0.9: wait while it lifts; 0.9-1: drive through.
+      const x = progress < 0.55 ? -300 + (progress / 0.55) * 290 : progress < 0.9 ? -10 : -10 + ((progress - 0.9) / 0.1) * 560;
+      car.current?.setAttribute("transform", `translate(${x.toFixed(1)} 0)`);
+      light.current?.classList.toggle("go", progress > 0.86);
+    };
+    if (reducedMotion()) { gsap.set(arm.current, { rotation: -78, svgOrigin: "60 120" }); place(1); return; }
+    place(0);
     const ctx = gsap.context(() => {
-      gsap.fromTo(arm.current, { rotation: 0, svgOrigin: "60 120" }, {
-        rotation: -78, svgOrigin: "60 120", ease: "none",
-        scrollTrigger: { trigger: section.current, start: "top 85%", end: "top 35%", scrub: 0.5,
-          onUpdate: self => light.current?.classList.toggle("go", self.progress > 0.92) },
-      });
+      gsap.timeline({ scrollTrigger: { trigger: section.current, start: "top 90%", end: "top 25%", scrub: 0.5, onUpdate: self => place(self.progress) } })
+        .fromTo(arm.current, { rotation: 0, svgOrigin: "60 120" }, { rotation: 0, duration: 0.55, ease: "none" })
+        .to(arm.current, { rotation: -78, svgOrigin: "60 120", duration: 0.33, ease: "power1.inOut" })
+        .to({}, { duration: 0.12 });
     }, section);
-    return () => ctx.revert();
+    let flow = 0;
+    const stopFlow = onDrive(dt => {
+      flow = (flow - (drive.kmh / MAX_KMH) * 300 * dt) % 60;
+      lane.current?.setAttribute("stroke-dashoffset", flow.toFixed(1));
+    });
+    return () => { ctx.revert(); stopFlow(); };
   }, [pathname]);
   return (
-    <footer className="od-footer" ref={section}>
-      <svg className="od-gate" viewBox="0 -240 900 460" aria-hidden="true">
-        <rect x="0" y="176" width="900" height="44" className="od-gate-road" />
+    <footer className="od-footer" ref={section} data-chapter="Toll gate · Finish">
+      <svg className="od-gate" viewBox="-320 -240 1240 460" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+        <rect x="-320" y="176" width="1240" height="44" className="od-gate-road" />
+        <path ref={lane} className="od-gate-lane" d="M-320 198 H920" strokeDasharray="30 30" />
+        <g ref={car} className="od-gate-car">
+          <rect x="-56" y="150" width="56" height="24" rx="7" className="body" />
+          <rect x="-40" y="140" width="28" height="14" rx="4" className="cabin" />
+          <circle cx="-44" cy="176" r="7" className="wheel" /><circle cx="-12" cy="176" r="7" className="wheel" />
+        </g>
         <g className="od-gate-check">{Array.from({ length: 30 }, (_, i) => <rect key={i} x={i * 30} y={i % 2 ? 176 : 186} width="30" height="10" />)}</g>
         <rect x="40" y="96" width="40" height="80" className="od-gate-post" />
         <circle ref={light} cx="60" cy="86" r="9" className="od-gate-light" />
