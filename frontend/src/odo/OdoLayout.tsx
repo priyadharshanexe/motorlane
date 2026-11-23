@@ -10,7 +10,7 @@ import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/700.css";
 import { useSession } from "../requests";
 import RouteErrorBoundary from "../RouteErrorBoundary";
-import { drive, getLenis, MAX_KMH, onDrive, ScrollTrigger, startDrive, stopDrive } from "./drive";
+import { drive, getLenis, MAX_KMH, onDrive, onScreen, ScrollTrigger, startDrive, stopDrive } from "./drive";
 import { reducedMotion } from "./primitives";
 import { ThemeProvider, useTheme } from "./theme";
 import { Backdrop } from "./world";
@@ -140,11 +140,13 @@ function TollGate() {
     place(0);
     const trigger = ScrollTrigger.create({ trigger: section.current, start: "top 95%", end: "bottom bottom", scrub: 0.5, onUpdate: self => place(self.progress) });
     let flow = 0;
+    const visible = onScreen(section.current);
     const stopFlow = onDrive(dt => {
+      if (!visible.flag.on) return;
       flow = (flow - (drive.kmh / MAX_KMH) * 300 * dt) % 60;
       lane.current?.setAttribute("stroke-dashoffset", flow.toFixed(1));
     });
-    return () => { trigger.kill(); stopFlow(); };
+    return () => { trigger.kill(); stopFlow(); visible.stop(); };
   }, [pathname]);
   return (
     <footer className="od-footer" ref={section} data-chapter="Toll gate · Finish">

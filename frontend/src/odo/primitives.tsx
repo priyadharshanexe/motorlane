@@ -2,7 +2,7 @@
 // meter, run-once reveals, and the device/motion checks. Everything animates transform or opacity only.
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { CSSProperties } from "react";
-import { drive, onDrive, ScrollTrigger } from "./drive";
+import { drive, onDrive, onScreen, ScrollTrigger } from "./drive";
 
 /** "1 ride", "2 rides". */
 export const plural = (n: number, word: string, many = word + "s") => `${n} ${n === 1 ? word : many}`;
@@ -47,13 +47,23 @@ export function Odometer({ value, size = "lg", label }: { value: string; size?: 
 export function TripMeter({ digits = 5, className = "" }: { digits?: number; className?: string }) {
   const strips = useRef<(HTMLSpanElement | null)[]>([]);
   const last = useRef<number[]>([]);
-  useEffect(() => onDrive(() => {
+  const root = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    // The wheel height is measured once (and on resize), never inside the frame loop, which would force a layout
+    // right after the transform writes every frame.
+    let height = 0;
+    const measure = () => { height = strips.current[0]?.parentElement?.clientHeight ?? 0; };
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    if (root.current) ro?.observe(root.current);
+    const visible = onScreen(root.current);
+    const stop = onDrive(() => {
+    if (!visible.flag.on || !height) return;
     const tenths = drive.km * 10;
     const dpr = window.devicePixelRatio || 1;
     let carry = 0;
     for (let i = digits - 1; i >= 0; i--) {
       const strip = strips.current[i];
-      const height = strip?.parentElement?.clientHeight ?? 0;
       const digit = Math.floor(tenths / 10 ** (digits - 1 - i)) % 10;
       let roll: number;
       if (i === digits - 1) {
@@ -62,11 +72,13 @@ export function TripMeter({ digits = 5, className = "" }: { digits?: number; cla
       } else roll = carry;
       carry = digit === 9 ? roll : 0;
       const y = -Math.round((digit + roll) * height * dpr) / dpr;
-      if (strip && height && last.current[i] !== y) { last.current[i] = y; strip.style.transform = `translate3d(0, ${y}px, 0)`; }
+      if (strip && last.current[i] !== y) { last.current[i] = y; strip.style.transform = `translate3d(0, ${y}px, 0)`; }
     }
-  }), [digits]);
+    });
+    return () => { stop(); ro?.disconnect(); visible.stop(); };
+  }, [digits]);
   return (
-    <span className={`tripmeter ${className}`} aria-hidden="true">
+    <span className={`tripmeter ${className}`} aria-hidden="true" ref={root}>
       {Array.from({ length: digits }, (_, i) => (
         <span className={`tripmeter-wheel${i === digits - 1 ? " tenths" : ""}`} key={i}>
           <span className="tripmeter-strip" ref={el => { strips.current[i] = el; }}>

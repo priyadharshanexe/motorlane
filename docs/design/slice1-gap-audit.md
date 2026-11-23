@@ -124,5 +124,16 @@ Verified in headless Chrome against port 8000 (stills in `docs/design/slice1/` a
 
 | Item | Status |
 | --- | --- |
-| Mobile LCP ≤ 2.5 s on 4G (home 3.5 s, catalog 5.8 s, detail 5.3 s now) | Open: deferred to a dedicated speed pass after the redesign |
-| About 60 fps at x4 while scrolling home (38–40 now) and p95 ≤ 16.7 ms at x1 (~21 ms now) | Open: deferred to the same speed pass |
+| Mobile LCP ≤ 2.5 s on 4G (home 3.5 s, catalog 5.8 s, detail 5.3 s now) | ✅ Final pass, same method (412×823, slow 4G, 4× CPU, median of 3): before home 2.54 s / catalog 6.02 s / detail 5.19 s; after home 0.74 s / catalog 2.10 s / detail 2.16 s. CLS ≤ 0.008 |
+| About 60 fps at x4 while scrolling home (38–40 now) and p95 ≤ 16.7 ms at x1 (~21 ms now) | 🟡 Final pass: x4 41 → 53 fps average, longest task 93 → 0 ms (no long tasks); x1 p95 17 → 14 ms. The 55 fps target is not met while the 3D road is on screen: a frame-budget watchdog drops to the 2D road (59 fps at x4) after ~1 s of slow frames |
+
+## Speed pass (final)
+
+| Change | Effect |
+| --- | --- |
+| Django puts each public route's first paint in the HTML: the headline (and the catalog's or vehicle's first photo) as static markup, kept as an overlay until the real page has its headline and the photo has loaded | LCP no longer waits for the JS |
+| The first photo is preloaded with high priority; the page's API response is inlined (a JSON `initial-data` script), so the first render needs no request | catalog 6.0 → 2.1 s, detail 5.2 → 2.2 s |
+| Route chunks preloaded per route (a manifest from the build) instead of home's on every page; none on photo-first pages | the photo gets the bandwidth first |
+| Vendor chunks split (`vendor-react`, `vendor-app`) | app changes no longer invalidate them in cache |
+| Trip meter measures its wheels once (ResizeObserver), not every frame; per-frame writes only when the value changed; hero, how-it-works road, footer lane and trip meter pause off screen (one shared IntersectionObserver) | layouts per frame 2.9 → 1.6, style recalcs 5.8 → 2.9 |
+| 3D road frame-budget watchdog | x4 41 → 53 fps; no long tasks |

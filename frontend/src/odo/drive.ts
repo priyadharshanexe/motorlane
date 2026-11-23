@@ -75,4 +75,17 @@ function tick(time: number, deltaMs: number) {
   listeners.forEach(listener => listener(dt));
 }
 
+/** Whether an element is on (or near) screen, kept up to date by one shared IntersectionObserver, so per-frame
+ *  listeners can skip work for things nobody can see. */
+const seen = new WeakMap<Element, { on: boolean }>();
+let watcher: IntersectionObserver | null = null;
+export function onScreen(el: Element | null) {
+  const flag = { on: true };
+  if (!el || typeof IntersectionObserver === "undefined") return { flag, stop: () => {} };
+  watcher ??= new IntersectionObserver(entries => entries.forEach(e => { const f = seen.get(e.target); if (f) f.on = e.isIntersecting; }), { rootMargin: "120px 0px" });
+  seen.set(el, flag);
+  watcher.observe(el);
+  return { flag, stop: () => { watcher?.unobserve(el); seen.delete(el); } };
+}
+
 export { gsap, ScrollTrigger };

@@ -9,7 +9,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type { Vehicle } from "../api";
 import { Notice } from "../shared";
-import { drive, gsap, IDLE_KMH, MAX_KMH, onDrive, ScrollTrigger } from "./drive";
+import { drive, gsap, IDLE_KMH, MAX_KMH, onDrive, onScreen as watchScreen, ScrollTrigger } from "./drive";
 import { KeyTag, KeyTagSkeleton } from "./KeyTag";
 import { canRun3D, Odometer, plural, reducedMotion, TripMeter, useOnce } from "./primitives";
 import { useTheme } from "./theme";
@@ -53,7 +53,7 @@ function Hero() {
   const section = useRef<HTMLElement>(null), headline = useRef<HTMLHeadingElement>(null);
   const streaks = useRef<HTMLDivElement>(null), sheet = useRef<HTMLSpanElement>(null), flatDashes = useRef<HTMLSpanElement>(null);
   const needle = useRef<SVGLineElement>(null), kmh = useRef<HTMLSpanElement>(null);
-  const [use3D] = useState(canRun3D);
+  const [use3D, setUse3D] = useState(canRun3D);
   // The 3D road (and its ~230 KB chunk) loads only once the browser is idle after the first paint, so it never
   // competes with the headline (the LCP); the 2D road shows until then.
   const [load3D, setLoad3D] = useState(false);
@@ -65,6 +65,20 @@ function Hero() {
     return () => window.clearTimeout(id);
   }, [use3D]);
   const [onScreen, setOnScreen] = useState(true);
+  // Frame-budget watchdog: if the 3D road keeps frames over ~26 ms (a slow GPU or CPU), drop to the 2D road for
+  // the rest of the visit rather than scroll at half speed.
+  useEffect(() => {
+    if (!use3D || !load3D) return;
+    let n = 0, sum = 0, windows = 0;
+    return onDrive(dt => {
+      if (!onScreen) return;
+      sum += dt; n += 1;
+      if (n < 30) return;
+      windows += 1;  // the first window covers the 3D scene's own start-up, so it does not count
+      if (windows > 1 && sum / n > 0.026) setUse3D(false);
+      n = 0; sum = 0;
+    });
+  }, [use3D, load3D, onScreen]);
 
   useLayoutEffect(() => {
     if (reducedMotion()) return;
@@ -85,10 +99,14 @@ function Hero() {
 
   // Per frame from the shared drive state: headline stretch, speed streaks, speedometer, and the 2D road.
   useEffect(() => {
-    let distance = 0, streakY = 0, streaksOn = true, shownKmh = -1;
-    return onDrive(dt => {
+    let distance = 0, streakY = 0, streaksOn = true, shownKmh = -1, shownHead = "", shownNeedle = "";
+    // Everything here lives in the hero: skip it all once the hero is scrolled away.
+    const visible = watchScreen(headline.current?.closest("section") ?? headline.current);
+    const stop = onDrive(dt => {
+      if (!visible.flag.on) return;
       const t = drive.throttle;
-      if (headline.current) headline.current.style.transform = `scaleX(${(1 + t * 0.18).toFixed(3)}) skewX(${(-t * 8).toFixed(2)}deg)`;
+      const head = `scaleX(${(1 + t * 0.18).toFixed(3)}) skewX(${(-t * 8).toFixed(2)}deg)`;
+      if (headline.current && head !== shownHead) { shownHead = head; headline.current.style.transform = head; }
       if (streaks.current && sheet.current) {
         const on = t > 0.04;
         if (on !== streaksOn) { streaksOn = on; streaks.current.style.visibility = on ? "visible" : "hidden"; }
@@ -99,7 +117,8 @@ function Hero() {
         }
       }
       const shownSpeed = Math.max(drive.kmh, sweep.current.kmh);
-      if (needle.current) needle.current.style.transform = `rotate(${(-125 + (shownSpeed / MAX_KMH) * 250).toFixed(1)}deg)`;
+      const rot = `rotate(${(-125 + (shownSpeed / MAX_KMH) * 250).toFixed(1)}deg)`;
+      if (needle.current && rot !== shownNeedle) { shownNeedle = rot; needle.current.style.transform = rot; }
       const rounded = Math.round(shownSpeed);
       if (kmh.current && rounded !== shownKmh) { shownKmh = rounded; kmh.current.textContent = String(rounded).padStart(3, "0"); }
       if (flatDashes.current) {
@@ -107,6 +126,7 @@ function Hero() {
         flatDashes.current.style.transform = `translate3d(0, ${(distance - 82).toFixed(1)}px, 0) scaleY(${(1 + t * 1.5).toFixed(2)})`;
       }
     });
+    return () => { stop(); visible.stop(); };
   }, []);
 
   const search = (event: React.FormEvent<HTMLFormElement>) => {
@@ -317,11 +337,13 @@ function HowItWorks() {
     const trigger = ScrollTrigger.create({ trigger: path.ownerSVGElement, start: "center 85%", end: "center 30%", scrub: 0.6,
       onUpdate: self => place(self.progress) });
     let flow = 0;
+    const visible = watchScreen(path.ownerSVGElement);
     const stopFlow = onDrive(dt => {
+      if (!visible.flag.on) return;
       flow = (flow - (drive.kmh / MAX_KMH) * 240 * dt) % 40;
       if (lane.current) lane.current.style.strokeDashoffset = flow.toFixed(1);
     });
-    return () => { trigger.kill(); stopFlow(); };
+    return () => { trigger.kill(); stopFlow(); visible.stop(); };
   }, []);
   const d = "M20 200 C 220 200, 260 60, 460 60 S 700 200, 900 190 S 1120 70, 1180 70";
   return (

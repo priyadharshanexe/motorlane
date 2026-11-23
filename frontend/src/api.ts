@@ -80,7 +80,23 @@ export class ApiError extends Error {
   }
 }
 
+/** API data the server inlined for the first page (see rental/views.py react_app): each entry is used once. */
+let initial: Record<string, unknown> | null | undefined
+function takeInitial(path: string): unknown {
+  if (initial === undefined) {
+    try { initial = JSON.parse(document.getElementById('initial-data')?.textContent || 'null') } catch { initial = null }
+  }
+  if (!initial || !(path in initial)) return undefined
+  const value = initial[path]
+  delete initial[path]
+  return value
+}
+
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
+  if (!options?.method || options.method === 'GET') {
+    const ready = typeof document !== 'undefined' ? takeInitial(path) : undefined
+    if (ready !== undefined) return ready as T
+  }
   const response = await fetch(`/api/v1/${path}`, { ...options, credentials: 'same-origin' })
   if (!response.ok) {
     const payload: unknown = await response.json().catch(() => null)

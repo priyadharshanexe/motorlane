@@ -2692,3 +2692,19 @@ main {
 .refund-delayed { color: #b42318; }
 .refund-pending { color: #7a4b00; }
 .refund-refunded { color: #1b7a3a; }
+
+/* The static first paint Django puts inside #root (rental/views.py, _static_first): the page's headline and, on the
+   catalog and a vehicle page, its first photo, styled before any JS arrives. React replaces it when it mounts. */
+.static-first { min-height: 100vh; background: #121417; color: #EDEAE3; padding: 96px clamp(16px, 4vw, 64px) 40px;
+  font-family: "Archivo Variable", "Archivo", system-ui, sans-serif; }
+.static-first h1 { margin: 0 0 18px; font-weight: 900; font-size: clamp(44px, 6vw, 80px); line-height: .95; text-transform: uppercase;
+  letter-spacing: -.01em; font-stretch: 125%; }
+.static-first h1 em { font-style: normal; color: #FFC531; }
+.static-first p { color: #A3A7AE; font: 400 18px/1.5 "Public Sans Variable", system-ui, sans-serif; max-width: 480px; margin: 0 0 20px; }
+.static-first img.wide { max-width: none; }
+@media (max-width: 900px) { .static-first img.wide { width: 100vw; margin-left: calc(-1 * clamp(16px, 4vw, 64px)); border-radius: 0; } }
+.static-first img { display: block; width: 100%; max-width: 760px; aspect-ratio: 1.55; object-fit: cover; border-radius: 6px; background: #1E2125; }
+@media (prefers-color-scheme: light) { .static-first { background: #F3F1EC; color: #16181B; } .static-first h1 em { color: #946000; } .static-first p { color: #5A5E66; } }
+.static-overlay { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; transition: opacity .25s ease; }
+.static-overlay.out { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .static-overlay { transition: none; } }
