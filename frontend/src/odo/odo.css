@@ -191,7 +191,9 @@
 .od-rack-bar { height: 12px; margin: 0 calc(var(--gutter) * -1) 0; border-radius: 0; position: relative; z-index: 1;
   background: linear-gradient(#C9CED4, #7E858D 55%, #5A6068); box-shadow: 0 6px 10px -6px #000a; }
 .od-tags.od-lane { display: flex; gap: 30px; overflow-x: auto; overflow-y: visible; padding: 34px 4px 30px; scroll-snap-type: x proximity;
-  scrollbar-width: thin; cursor: grab; overscroll-behavior-x: contain; }
+  scrollbar-width: none; cursor: grab; overscroll-behavior-x: contain; }
+.od-tags.od-lane::-webkit-scrollbar { display: none; }  /* dragging, swiping, the trackpad and the keyboard still scroll it */
+.od-tags.od-lane:focus-visible { outline-offset: 6px; }
 .od-lane.dragging { cursor: grabbing; scroll-snap-type: none; user-select: none; }
 .od-lane .od-drop, .od-lane .od-tag-skeleton { flex: 0 0 min(320px, 80vw); scroll-snap-align: start; position: relative; }
 .od-lane .od-drop::before { content: ""; position: absolute; left: 50%; top: -34px; width: 3px; height: 50px; margin-left: -1.5px; z-index: 4;
@@ -284,16 +286,24 @@
 .od-host-callout p { color: var(--dust); max-width: 560px; margin-top: 14px; }
 
 /* footer: the toll gate */
-.od-footer { padding: 60px var(--gutter) 40px; border-top: 1px solid var(--kerb); }
-.od-footer { position: relative; z-index: 1; }
-.od-gate { width: 100%; max-width: 1400px; height: auto; display: block; margin: 0 auto 40px; overflow: hidden; }
+.od-footer { position: relative; z-index: 1; padding: 30px var(--gutter) 40px; border-top: 1px solid var(--kerb); overflow: hidden; }
+.od-gate { width: 100%; height: clamp(200px, 22vw, 330px); margin: 0 0 30px; display: block; overflow: visible; }  /* the road runs past the scene to both edges */
+.od-gate-road { fill: var(--asphalt); }
 .od-gate-lane { stroke: var(--lane); stroke-width: 4; fill: none; }
-.od-gate-car .body { fill: var(--lane); } .od-gate-car .cabin { fill: #16181B; opacity: .8; } .od-gate-car .wheel { fill: #16181B; }
-.od-gate-road { fill: var(--asphalt); } .od-gate-check rect { fill: var(--chalk); } .od-gate-post { fill: var(--kerb); }
-.od-gate-arm { fill: var(--chalk); } .od-gate-stripe { fill: #E14B4B; }
-.od-gate-light { fill: #E14B4B; transition: fill .3s; } .od-gate-light.go { fill: var(--progress); }
-.od-app[data-theme="light"] .od-gate-arm { fill: #FFFFFF; stroke: #B9B4AA; stroke-width: 1.5; }
-.od-app[data-theme="light"] .od-gate-check rect { fill: #FFFFFF; }
+.od-gate-kerb .r { fill: #E14B4B; } .od-gate-kerb .w { fill: #EDEAE3; }
+.od-gate-pillar { fill: var(--ghost); }
+.od-gate-canopy { fill: var(--raised); stroke: var(--kerb); }
+.od-gate-fascia { fill: var(--lane); }
+.od-gate-sign { fill: var(--chalk); font: 800 18px "Archivo Variable", "Archivo", "Noto Sans Tamil", "Nirmala UI", sans-serif; letter-spacing: .06em; }
+.od-gate-booth { fill: var(--raised); stroke: var(--kerb); stroke-width: 2; }
+.od-gate-window { fill: color-mix(in srgb, var(--lane) 30%, var(--tarmac)); }
+.od-gate-lamp { fill: #16181B; }
+.od-gate-post { fill: var(--ghost); }
+.od-gate-arm { fill: #EDEAE3; } .od-gate-stripe { fill: #E14B4B; }
+.od-gate-light { fill: #E14B4B; transition: fill .3s; } .od-gate-light.go { fill: #3DDC97; }
+.od-gate-car .body { fill: var(--lane); } .od-gate-car .cabin { fill: #16181B; opacity: .85; }
+.od-gate-car .wheel { fill: #16181B; stroke: #5A6068; stroke-width: 3; } .od-gate-car .lamp { fill: #FFF4C8; }
+.od-app[data-theme="light"] .od-gate-arm { stroke: #B9B4AA; stroke-width: 1; }
 .od-footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 30px; }
 .od-footer-grid nav { display: grid; gap: 8px; align-content: start; }
 .od-footer-grid nav a { color: var(--chalk) !important; }

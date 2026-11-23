@@ -10,7 +10,7 @@ import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/700.css";
 import { useSession } from "../requests";
 import RouteErrorBoundary from "../RouteErrorBoundary";
-import { drive, gsap, getLenis, MAX_KMH, onDrive, ScrollTrigger, startDrive, stopDrive } from "./drive";
+import { drive, getLenis, MAX_KMH, onDrive, ScrollTrigger, startDrive, stopDrive } from "./drive";
 import { reducedMotion } from "./primitives";
 import { ThemeProvider, useTheme } from "./theme";
 import { Backdrop } from "./world";
@@ -115,51 +115,65 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-/** The end of the drive: the road runs in from the left to a toll gate. As you scroll down to it (scrubbed) the
- *  car rolls up and waits, the barrier lifts, the light turns green and the car drives through. The centre line
- *  flows at the shared drive speed. */
+/** The end of the drive: a toll plaza. As you scroll down to it (scrubbed, so scrolling back reverses it) a car
+ *  drives in along the road and stops at the barrier, the arm lifts, the booth light turns green, and the car drives
+ *  through and away. The centre line flows at the shared drive speed; the backdrop's kerbs carry on either side. */
 function TollGate() {
   const section = useRef<HTMLElement>(null), arm = useRef<SVGGElement>(null), light = useRef<SVGCircleElement>(null);
   const car = useRef<SVGGElement>(null), lane = useRef<SVGPathElement>(null);
   const { pathname } = useLocation();
   useLayoutEffect(() => {
+    const ease = (t: number) => 1 - (1 - t) ** 3;
     const place = (progress: number) => {
-      // 0-0.55: roll up to the barrier; 0.55-0.9: wait while it lifts; 0.9-1: drive through.
-      const x = progress < 0.55 ? -300 + (progress / 0.55) * 290 : progress < 0.9 ? -10 : -10 + ((progress - 0.9) / 0.1) * 560;
+      // 0-0.45 drive up and stop at the barrier; 0.45-0.75 the arm lifts; 0.75-1 drive through and off.
+      let x: number, lift: number;
+      if (progress < 0.45) { x = -160 + ease(progress / 0.45) * (588 + 160); lift = 0; }
+      else if (progress < 0.75) { x = 588; lift = ease((progress - 0.45) / 0.3); }
+      else { x = 588 + ((progress - 0.75) / 0.25) ** 2 * 1100; lift = 1; }
       car.current?.setAttribute("transform", `translate(${x.toFixed(1)} 0)`);
-      light.current?.classList.toggle("go", progress > 0.86);
+      arm.current?.setAttribute("transform", `rotate(${(lift * 75).toFixed(1)} 740 205)`);  // clears the canopy
+      light.current?.classList.toggle("go", lift > 0.9);
     };
-    if (reducedMotion()) { gsap.set(arm.current, { rotation: -78, svgOrigin: "60 120" }); place(1); return; }
+    if (reducedMotion()) { place(0.75); return; }
     place(0);
-    const ctx = gsap.context(() => {
-      gsap.timeline({ scrollTrigger: { trigger: section.current, start: "top 90%", end: "top 25%", scrub: 0.5, onUpdate: self => place(self.progress) } })
-        .fromTo(arm.current, { rotation: 0, svgOrigin: "60 120" }, { rotation: 0, duration: 0.55, ease: "none" })
-        .to(arm.current, { rotation: -78, svgOrigin: "60 120", duration: 0.33, ease: "power1.inOut" })
-        .to({}, { duration: 0.12 });
-    }, section);
+    const trigger = ScrollTrigger.create({ trigger: section.current, start: "top 95%", end: "bottom bottom", scrub: 0.5, onUpdate: self => place(self.progress) });
     let flow = 0;
     const stopFlow = onDrive(dt => {
       flow = (flow - (drive.kmh / MAX_KMH) * 300 * dt) % 60;
       lane.current?.setAttribute("stroke-dashoffset", flow.toFixed(1));
     });
-    return () => { ctx.revert(); stopFlow(); };
+    return () => { trigger.kill(); stopFlow(); };
   }, [pathname]);
   return (
     <footer className="od-footer" ref={section} data-chapter="Toll gate · Finish">
-      <svg className="od-gate" viewBox="-320 -240 1240 460" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
-        <rect x="-320" y="176" width="1240" height="44" className="od-gate-road" />
-        <path ref={lane} className="od-gate-lane" d="M-320 198 H920" strokeDasharray="30 30" />
+      <svg className="od-gate" viewBox="0 0 1400 310" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+        {/* road, centre line and kerb */}
+        <rect x="-400" y="236" width="2200" height="56" className="od-gate-road" />
+        <path ref={lane} className="od-gate-lane" d="M-400 264 H1800" strokeDasharray="30 30" />
+        <g className="od-gate-kerb">{Array.from({ length: 56 }, (_, i) => <rect key={i} x={-400 + i * 40} y="292" width="40" height="10" className={i % 2 ? "w" : "r"} />)}</g>
+        {/* the plaza: canopy on two pillars, with a fascia sign */}
+        <rect x="540" y="50" width="16" height="186" className="od-gate-pillar" />
+        <rect x="984" y="50" width="16" height="186" className="od-gate-pillar" />
+        <rect x="500" y="8" width="540" height="38" rx="3" className="od-gate-canopy" />
+        <rect x="500" y="44" width="540" height="6" className="od-gate-fascia" />
+        <text x="770" y="33" textAnchor="middle" className="od-gate-sign">TOLL PLAZA · சுங்கச்சாவடி</text>
+        {/* the booth with its light */}
+        <rect x="770" y="140" width="110" height="96" rx="4" className="od-gate-booth" />
+        <rect x="784" y="154" width="82" height="40" rx="2" className="od-gate-window" />
+        <rect x="758" y="112" width="20" height="40" rx="4" className="od-gate-lamp" />
+        <circle ref={light} cx="768" cy="124" r="6" className="od-gate-light" />
+        {/* the car, nose to the right */}
         <g ref={car} className="od-gate-car">
-          <rect x="-56" y="150" width="56" height="24" rx="7" className="body" />
-          <rect x="-40" y="140" width="28" height="14" rx="4" className="cabin" />
-          <circle cx="-44" cy="176" r="7" className="wheel" /><circle cx="-12" cy="176" r="7" className="wheel" />
+          <rect x="-112" y="206" width="112" height="30" rx="9" className="body" />
+          <path d="M-88 206 L-74 184 H-34 L-18 206 Z" className="cabin" />
+          <rect x="-8" y="214" width="8" height="8" rx="2" className="lamp" />
+          <circle cx="-86" cy="238" r="11" className="wheel" /><circle cx="-26" cy="238" r="11" className="wheel" />
         </g>
-        <g className="od-gate-check">{Array.from({ length: 30 }, (_, i) => <rect key={i} x={i * 30} y={i % 2 ? 176 : 186} width="30" height="10" />)}</g>
-        <rect x="40" y="96" width="40" height="80" className="od-gate-post" />
-        <circle ref={light} cx="60" cy="86" r="9" className="od-gate-light" />
+        {/* the barrier: post at the booth, arm across the lane towards the oncoming car */}
+        <rect x="732" y="196" width="16" height="40" className="od-gate-post" />
         <g ref={arm}>
-          <rect x="60" y="112" width="400" height="16" rx="3" className="od-gate-arm" />
-          {Array.from({ length: 5 }, (_, i) => <rect key={i} x={90 + i * 76} y="112" width="38" height="16" className="od-gate-stripe" />)}
+          <rect x="600" y="200" width="144" height="10" rx="3" className="od-gate-arm" />
+          {Array.from({ length: 3 }, (_, i) => <rect key={i} x={610 + i * 44} y="200" width="22" height="10" className="od-gate-stripe" />)}
         </g>
       </svg>
       <div className="od-footer-grid">

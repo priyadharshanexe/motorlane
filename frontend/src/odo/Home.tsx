@@ -258,7 +258,7 @@ function Rack() {
       </div>
       <div className="od-rack-bar" aria-hidden="true" />
       <Notice error={query.error} />
-      <div className="od-tags od-lane" ref={rack} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}
+      <div className="od-tags od-lane" ref={rack} tabIndex={0} role="region" aria-label="Newest rides, scroll sideways" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}
         onClickCapture={event => { if (rack.current?.classList.contains("dragging")) { event.preventDefault(); event.stopPropagation(); } }}>
         {query.isPending && Array.from({ length: 6 }, (_, i) => <KeyTagSkeleton key={i} />)}
         {rows.map((vehicle, index) => (

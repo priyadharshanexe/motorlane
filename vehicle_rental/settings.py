@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -153,6 +154,23 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 FRONTEND_BUILD = BASE_DIR / "frontend" / "dist"
 STATICFILES_DIRS = [("react", FRONTEND_BUILD)] if FRONTEND_BUILD.is_dir() else []
+# collectstatic writes gzip (and Brotli, when the brotli package is present) copies that WhiteNoise serves to
+# browsers that accept them: the app's JavaScript is about a third of its size on the wire. Vite's build output is
+# already content-hashed, so those files are cached for a year ("immutable"); everything else stays revalidated.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
+
+
+def _vite_hashed(path, url):
+    return "/react/assets/" in url and bool(re.search(r"-[A-Za-z0-9_-]{8}\.[a-z0-9]+$", url))
+
+
+WHITENOISE_IMMUTABLE_FILE_TEST = _vite_hashed
+# Serve the collected (compressed) files even with DEBUG on, as the Docker image always runs collectstatic; with
+# finders WhiteNoise would serve the uncompressed sources. Plain `runserver` still falls back to Django's handler.
+WHITENOISE_USE_FINDERS = False
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

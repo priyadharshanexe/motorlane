@@ -4,7 +4,7 @@
 //   <Hud>        a fixed GPS strip: the current chapter, a speed needle and the km odometer;
 //   useChapters  every [data-chapter] section announces itself to the HUD as it crosses the middle of the screen,
 //                and all triggers re-measure when the page height changes (late data and images).
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { drive, gsap, MAX_KMH, onDrive, ScrollTrigger } from "./drive";
 import { reducedMotion, TripMeter } from "./primitives";
@@ -38,8 +38,15 @@ export function useChapters(root: RefObject<HTMLElement | null>, deps: unknown[]
 
 export function Backdrop() {
   const near = useRef<HTMLDivElement>(null), far = useRef<HTMLDivElement>(null), sweep = useRef<HTMLDivElement>(null);
+  const [on, setOn] = useState(false);
   useEffect(() => {
-    if (reducedMotion()) return;
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (w.requestIdleCallback) { const id = w.requestIdleCallback(() => setOn(true), { timeout: 2000 }); return () => w.cancelIdleCallback?.(id); }
+    const id = window.setTimeout(() => setOn(true), 800);
+    return () => window.clearTimeout(id);
+  }, []);
+  useEffect(() => {
+    if (!on || reducedMotion()) return;
     let sweeping = false;
     return onDrive(() => {
       const travelled = drive.km * 9000;  // the margins scroll with distance driven, not just page position
@@ -53,9 +60,10 @@ export function Backdrop() {
         });
       }
     });
-  }, []);
+  }, [on]);
+  if (!on) return <div className="od-backdrop" aria-hidden="true" />;
   return (
-    <div className="od-backdrop" aria-hidden="true">
+    <div className="od-backdrop od-backdrop-in" aria-hidden="true">
       <div className="od-grain" />
       <div className="od-far" ref={far}>
         {Array.from({ length: 8 }, (_, i) => (
@@ -81,11 +89,14 @@ export function Hud({ hero = "" }: { hero?: string }) {
   const hud = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const target = hero ? document.querySelector(hero) : null;
-    if (!target) { hud.current?.classList.remove("away"); return; }
+    const footer = document.querySelector(".od-footer");
+    const atFooter = footer ? ScrollTrigger.create({ trigger: footer, start: "top 92%", end: "max",
+      onToggle: self => hud.current?.classList.toggle("off", self.isActive) }) : null;
+    if (!target) { hud.current?.classList.remove("away"); return () => atFooter?.kill(); }
     const trigger = ScrollTrigger.create({ trigger: target, start: "top bottom", end: "bottom 55%",  // starts before scroll 0
       onToggle: self => hud.current?.classList.toggle("away", self.isActive) });
     hud.current?.classList.toggle("away", window.scrollY < trigger.end);
-    return () => trigger.kill();
+    return () => { trigger.kill(); atFooter?.kill(); };
   }, [hero]);
   useEffect(() => {
     let shown = "", shownSpeed = -1;

@@ -1,6 +1,8 @@
 /* The shared "world": backdrop and HUD. Works under any root that defines the Odometer tokens and data-theme
    (the real pages' .od-app and the lab's .lab). */
 .od-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.od-backdrop-in { animation: od-backdrop-in .6s ease both; }
+@keyframes od-backdrop-in { from { opacity: 0; } }
 .od-grain { position: absolute; inset: 0; opacity: .6;
   background-image: radial-gradient(#ffffff0f 1px, transparent 1.2px), radial-gradient(#00000055 1px, transparent 1.2px);
   background-size: 5px 5px, 7px 7px; background-position: 0 0, 2px 3px; }
@@ -30,7 +32,7 @@
   padding: 8px 18px; background: color-mix(in srgb, var(--raised) 94%, transparent); border: 1px solid var(--kerb); border-radius: 999px;
   font-size: 13px; white-space: nowrap; color: var(--chalk); transition: opacity .35s ease, transform .35s ease; }
 [data-theme="light"] .od-hud { box-shadow: 0 6px 20px -12px #0004; }
-.od-hud.away { opacity: 0; transform: translate(-50%, 24px); pointer-events: none; }
+.od-hud.away, .od-hud.off { opacity: 0; transform: translate(-50%, 24px); pointer-events: none; }
 .od-hud-pin { width: 10px; height: 10px; border-radius: 50%; background: var(--progress); box-shadow: 0 0 0 4px #3DDC9733; }
 .od-hud-chapter { font: 700 13px "Archivo Variable", "Archivo", sans-serif; font-stretch: 112%; text-transform: uppercase; letter-spacing: .06em; min-width: 210px; }
 .od-hud-gauge svg { width: 26px; height: 26px; display: block; }

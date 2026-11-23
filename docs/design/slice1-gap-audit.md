@@ -107,3 +107,15 @@ Verified in headless Chrome against port 8000 (stills in `docs/design/slice1/` a
 | LCP (same throttling) | ❌ home ~6.1 s, catalog ~6.3 s, detail ~8.5 s (FCP ~4.7 s: the main JS bundle on slow 4G). Budget 2.0–2.5 s: needs bundle splitting / preloading, open |
 | Frame rate, home while scrolling (1920×870) | x1: 85 fps avg, p95 20.8 ms (misses 60 Hz on a few frames); x4: 44 fps, 6 long tasks. Open |
 | Still open | Drag-to-dismiss on the phone filter sheet; draggable-with-inertia was added for the rack only |
+
+## Second pass (review feedback)
+
+| Item | Result |
+| --- | --- |
+| Toll-gate footer | ✅ A toll plaza: canopy with a "TOLL PLAZA · சுங்கச்சாவடி" fascia on two pillars, a booth with its light, the barrier across the lane in front of the car. Scrubbed: the car drives in and stops at the barrier, the arm lifts (clear of the canopy), the light turns green, the car drives through and off. Road and kerbs run edge to edge; the empty space above is gone (footer ~570 px at 1920×870). |
+| HUD over the footer links | ✅ Hidden once the footer is in view |
+| Rack scrollbar | ✅ Hidden; the lane still scrolls by drag, swipe, trackpad and keyboard (it is focusable) |
+| Static compression | ✅ WhiteNoise now serves pre-compressed files (`CompressedStaticFilesStorage`, collected files even with DEBUG on); hashed Vite assets are cached as immutable. Entry script on the wire: 275 KB → 87 KB |
+| Bundle split | ✅ The workspace/account pages, their layout and their Google Fonts load as one separate chunk; the public pages no longer download them. The public shell and home chunks are `modulepreload`ed from `index.html` (no chunk waterfall); the headline font is preloaded; the backdrop mounts after first paint; the 3D road loads when idle after first paint |
+| Mobile cold load, slow 4G + 4× CPU, median of 3 (LCP / first paint) | home 6.1 s → **3.5 s** / 4.7 → 3.5 s · catalog 6.3 → **5.8 s** / 4.8 → 2.4 s · detail 8.5 → **5.3 s** / 4.6 → 2.5 s. ❌ Still above the 2.5 s target. On catalog and detail the LCP is the vehicle photo, which waits for the API data; home is bound by script evaluation (TBT ~3.6 s at 4× CPU) |
+| Frame rate, home while scrolling (1920×870) | x1: 62–64 fps avg, p95 ~21 ms; x4: 38–40 fps, 8–12 long tasks. ❌ Not at the target |
