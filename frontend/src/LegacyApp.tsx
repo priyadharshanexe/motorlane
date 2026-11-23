@@ -4,9 +4,7 @@ import { Link, Route, Routes } from "react-router-dom";
 import { Favorites } from "./Favorites";
 import AccountScreen from "./AccountScreen";
 import { Layout, RequireSession } from "./Layout";
-import { Bookings } from "./Bookings";
 import { Dashboard } from "./Dashboard";
-import { Fleet, MaintenanceIndex, MaintenancePage, Values } from "./Owner";
 import "./legacy-fonts.css";
 
 export default function LegacyApp() {
@@ -34,54 +32,6 @@ export default function LegacyApp() {
             element={
               <RequireSession>
                 <Dashboard />
-              </RequireSession>
-            }
-          />
-          <Route
-            path="owner"
-            element={
-              <RequireSession>
-                <Dashboard owner />
-              </RequireSession>
-            }
-          />
-          <Route
-            path="owner/requests"
-            element={
-              <RequireSession>
-                <Bookings owner />
-              </RequireSession>
-            }
-          />
-          <Route
-            path="owner/fleet"
-            element={
-              <RequireSession>
-                <Fleet />
-              </RequireSession>
-            }
-          />
-          <Route
-            path="owner/fleet/:id/maintenance"
-            element={
-              <RequireSession>
-                <MaintenancePage />
-              </RequireSession>
-            }
-          />
-          <Route
-            path="owner/maintenance"
-            element={
-              <RequireSession>
-                <MaintenanceIndex />
-              </RequireSession>
-            }
-          />
-          <Route
-            path="owner/value"
-            element={
-              <RequireSession>
-                <Values />
               </RequireSession>
             }
           />

@@ -273,6 +273,6 @@
 .od-tl-dot[data-state="refund_issued"] { background: var(--pending); } .od-tl-dot[data-state="refunded"] { background: var(--returned); }
 .od-tl-stamp { display: inline-block; margin-left: 10px; vertical-align: 3px; font: 700 11px/1 var(--mono, monospace); letter-spacing: .14em;
   color: var(--confirmed); border: 2px solid currentColor; padding: 3px 6px; border-radius: 3px; opacity: 0; transform: rotate(-8deg) scale(1.8); }
-.od-tl li.reached .od-tl-stamp { animation: od-stamp .42s cubic-bezier(.2,1.6,.4,1) .1s forwards; }
-@keyframes od-stamp { 60% { opacity: 1; transform: rotate(-8deg) scale(.92); } to { opacity: 1; transform: rotate(-8deg) scale(1); } }
+.od-tl li.reached .od-tl-stamp { animation: od-tl-stamp-in .42s cubic-bezier(.2,1.6,.4,1) .1s forwards; }
+@keyframes od-tl-stamp-in { 60% { opacity: 1; transform: rotate(-8deg) scale(.92); } to { opacity: 1; transform: rotate(-8deg) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .od-tl-stamp { animation: none !important; opacity: 1; transform: rotate(-8deg); } }

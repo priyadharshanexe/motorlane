@@ -18,6 +18,13 @@ const SignInPage = lazy(() => import("./odo/AuthPages").then(m => ({ default: m.
 const RegisterPage = lazy(() => import("./odo/AuthPages").then(m => ({ default: m.RegisterPage })));
 const VerifyEmailPage = lazy(() => import("./odo/AuthPages").then(m => ({ default: m.VerifyEmailPage })));
 const ResetPage = lazy(() => import("./odo/AuthPages").then(m => ({ default: m.ResetPage })));
+const OwnerHome = lazy(() => import("./odo/Owner").then(m => ({ default: m.OwnerHome })));
+const OwnerRequests = lazy(() => import("./odo/Owner").then(m => ({ default: m.OwnerRequests })));
+const OwnerBooking = lazy(() => import("./odo/Owner").then(m => ({ default: m.OwnerBooking })));
+const OwnerValue = lazy(() => import("./odo/Owner").then(m => ({ default: m.OwnerValue })));
+const OwnerFleet = lazy(() => import("./odo/OwnerFleet").then(m => ({ default: m.OwnerFleet })));
+const OwnerMaintenanceIndex = lazy(() => import("./odo/OwnerFleet").then(m => ({ default: m.OwnerMaintenanceIndex })));
+const OwnerMaintenance = lazy(() => import("./odo/OwnerFleet").then(m => ({ default: m.OwnerMaintenance })));
 const RequireSession = lazy(() => import("./odo/states").then(m => ({ default: m.RequireSession })));
 
 // Start fetching the shell and the current page's chunk together at startup, instead of one after the other
@@ -45,6 +52,13 @@ export default function App() {
         <Route path="checkout/:id" element={<RequireSession><Checkout /></RequireSession>} />
         <Route path="bookings" element={<RequireSession><Trips /></RequireSession>} />
         <Route path="bookings/:id" element={<RequireSession><TripDetail /></RequireSession>} />
+        <Route path="owner" element={<RequireSession><OwnerHome /></RequireSession>} />
+        <Route path="owner/requests" element={<RequireSession><OwnerRequests /></RequireSession>} />
+        <Route path="owner/bookings/:id" element={<RequireSession><OwnerBooking /></RequireSession>} />
+        <Route path="owner/fleet" element={<RequireSession><OwnerFleet /></RequireSession>} />
+        <Route path="owner/maintenance" element={<RequireSession><OwnerMaintenanceIndex /></RequireSession>} />
+        <Route path="owner/fleet/:id/maintenance" element={<RequireSession><OwnerMaintenance /></RequireSession>} />
+        <Route path="owner/value" element={<RequireSession><OwnerValue /></RequireSession>} />
         <Route path="sign-in" element={<SignInPage />} />
         <Route path="register" element={<RegisterPage />} />
         <Route path="verify-email/:key" element={<VerifyEmailPage />} />

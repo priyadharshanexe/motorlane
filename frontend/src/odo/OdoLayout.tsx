@@ -16,6 +16,7 @@ import { ThemeProvider, useTheme } from "./theme";
 import { Backdrop } from "./world";
 import "./odo.css";
 import "./slice2.css";
+import "./slice3.css";
 
 export function OdoLayout({ children }: { children: ReactNode }) {
   return <ThemeProvider><Shell>{children}</Shell></ThemeProvider>;
