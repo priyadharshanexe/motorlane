@@ -8,15 +8,15 @@ availability, incoming requests, maintenance, and completed booking value.
 
 ![Motorlane marketplace homepage](docs/screenshots/marketplace.jpg)
 
-Screenshots refreshed on 20 November 2026 from the Docker app with real vehicle photographs and the studio hero. Signed-in pages use demo accounts.
+Screenshots refreshed on 23 November 2026 from the Docker app in the night theme, after the Odometer redesign. Signed-in pages use the seeded demo accounts.
 
-![A rental from booking to review: checkout with times and the price breakdown, demo payment, return with the deposit refund, review, cancellation refund and the owner's value report](docs/screenshots/journey.gif)
+![A rental end to end: search, the catalog, a vehicle, the trip sheet with the time road, the request, the owner approving on the departures board, the demo payment with the key tag, the booking timeline with the paid stop, the owner's instrument cluster and the value report](docs/screenshots/journey.gif)
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Browser["React · TypeScript · React Router"] -->|TanStack Query / same-origin HTTP| Django["Django · REST Framework"]
+    Browser["React · TypeScript · React Router · GSAP / Lenis · three.js"] -->|TanStack Query / same-origin HTTP| Django["Django · REST Framework"]
     Browser -->|Account flows / Google redirect| Allauth["django-allauth"]
     Django -->|Session and CSRF validation| Allauth
     Django -->|Booking and fleet transactions| DB[(MySQL)]
@@ -37,6 +37,26 @@ responses; business rules live in `rental/services/` (booking, pricing,
 availability, payments in `rental/payments/`, notifications, expiry, photos,
 listing, maintenance), read queries in `rental/selectors.py`, and access scoping
 in `rental/permissions.py` (rows another account owns answer 404).
+
+### Frontend
+
+The interface follows the "Odometer" design direction ([docs/design-direction.md](docs/design-direction.md)): the
+site is a drive, scrolling is the throttle, and prices, totals and counts roll like odometer digits. All pages live
+in `frontend/src/odo/`:
+
+| Area | Files | Highlights |
+| --- | --- | --- |
+| Shell | `OdoLayout.tsx`, `world.tsx`, `drive.ts`, `primitives.tsx`, `theme.tsx` | One scroll system (Lenis driving GSAP ScrollTrigger from one ticker), a road backdrop, a trip HUD, the toll-plaza footer, day and night themes |
+| Public | `Home.tsx`, `Road3D.tsx`, `Catalog.tsx`, `VehicleDetail.tsx`, `KeyTag.tsx` | A 3D road hero (three.js, loaded when idle, falling back to a 2D road on slow devices), key-tag cards, filters in the URL, a swipe and zoom gallery |
+| Renter | `Checkout.tsx`, `TimeRoad.tsx`, `PaymentSheet.tsx`, `Trips.tsx` | A draggable time road for pickup and return, a payment sheet (demo or Razorpay test), a scroll-drawn booking timeline with paid and refund stops |
+| Owner | `Owner.tsx`, `OwnerFleet.tsx` | Gauges, a split-flap departures board with live pickup windows, the fleet as key tags, a two-step listing sheet with a photo manager, a paint-to-block maintenance calendar, a value report |
+| Auth and states | `AuthPages.tsx`, `states.tsx` | Sign in and sign up with inline validation, email verification with resend, road-sign empty and error states |
+
+For a fast first paint, Django's `/app/` view adds per-route extras to the HTML: the page's headline (and first
+photo) as static markup shown until the app is ready, a preload for that photo, the page's API data inline, and the
+route's own JS chunks from a build manifest. Reduced motion shows every final state without animation. Element-by-
+element checklists with what was verified: [slice 1](docs/design/slice1-gap-audit.md),
+[slice 2](docs/design/slice2-checklist.md), [slice 3](docs/design/slice3-checklist.md).
 
 Django prices every rental server-side and validates final availability on
 submission. Bookings have pickup and return times; a configurable cleaning
@@ -69,7 +89,7 @@ verified by HMAC signature and each provider event id is applied once.
 | `Profile` | Marketplace details (phone) for an auth user; name and email live on the user |
 | `Vehicle`, `VehiclePhoto` | Listings with weekday/weekend rates and deposit; up to eight photos, one cover, WebP thumbnails at 400 and 1200 px |
 | `Booking` | Dates and times, status (Pending, Confirmed, Rejected, Expired, Cancelled, In progress, Returned), stored price breakdown |
-| `BookingEvent` | Append-only timeline: every creation, transition and expiry with actor and note |
+| `BookingEvent` | Append-only timeline: every creation, transition and expiry with actor and note, plus paid and refund stops (`kind`), each recorded once |
 | `MaintenanceBlock` | Whole-day unavailability set by the owner |
 | `Feedback` | One verified review per returned booking, rating 1 to 5 (database constraints) |
 | `Payment`, `RefundIntent`, `WebhookEvent` | Charge, refunds owed and their delivery state, processed provider event ids |
@@ -101,7 +121,8 @@ Requires Python 3.11, Node 22.12+, and MySQL 8.4. Docker can provide MySQL.
 For frontend development, start Django on port 8000 and run
 `npm --prefix frontend run dev`. Open the Vite URL under `/app/`. Vite proxies
 the API and account routes to Django. Use the same-origin built app to test
-Google callbacks and email links.
+Google callbacks and email links, and the first-paint extras (static headline,
+photo preload and inline data), which Django adds to the built `index.html`.
 
 ## Docker
 
@@ -192,7 +213,7 @@ openly licensed Wikimedia Commons images credited in [CREDITS.md](CREDITS.md).
 
 Run `python manage.py test`, `npm --prefix frontend test`,
 `npm --prefix frontend run lint`, and `npm --prefix frontend run build`.
-The Django suite (120+ tests) covers every status transition and permission,
+The Django suite (170+ tests) covers every status transition and permission,
 pricing, expiry, the email outbox, payments, refund intents and duplicate webhooks, concurrency
 on MySQL, and a full rental through the API. CI runs settings checks,
 migration checks (forward and reverse), OpenAPI validation and the suite on
@@ -204,7 +225,7 @@ with per-request script nonces, JSON log lines (`DJANGO_LOG_FORMAT`), pooled
 database connections (`DJANGO_CONN_MAX_AGE`), and `manage.py check` validation
 of rental and payment settings.
 
-[Catalog](docs/screenshots/catalog.jpg) · [Booking details](docs/screenshots/booking.jpg) · [Owner workspace](docs/screenshots/owner.jpg) · [Demo photo credits](rental/demo_images/CREDITS.md)
+[Catalog](docs/screenshots/catalog.jpg) · [Booking timeline](docs/screenshots/booking.jpg) · [Owner departures board](docs/screenshots/owner.jpg) · [Design direction](docs/design-direction.md) · [Demo photo credits](rental/demo_images/CREDITS.md)
 
 ## License
 
