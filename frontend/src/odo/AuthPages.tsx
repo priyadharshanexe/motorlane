@@ -127,7 +127,7 @@ export function RegisterPage() {
     onSuccess: () => cache.invalidateQueries({ queryKey: ["session"] }),
     onError: error => inline.setErrors(mapServerError(error.message)),
   });
-  if (signup.isSuccess) return <AuthFrame><VerifyPending email={email} /></AuthFrame>;
+  if (signup.isSuccess) return <AuthFrame><VerifyPending email={email} password={password} /></AuthFrame>;
   return (
     <AuthFrame>
       <span className="od-eyebrow">Start your logbook</span>
@@ -154,14 +154,16 @@ export function RegisterPage() {
 
 /** After sign-up: an indicator that blinks until the email is verified (polling the session), and a resend button
  *  with a 60-second cooldown ring. */
-function VerifyPending({ email }: { email: string }) {
+function VerifyPending({ email, password }: { email: string; password: string }) {
   const session = useQuery({ queryKey: ["session"], queryFn: () => api<{ user: unknown; csrf_token: string }>("session/"), refetchInterval: 5000 });
   const verified = Boolean(session.data?.user);
   const [cooldown, setCooldown] = useState(60);
   const [note, setNote] = useState("");
   useEffect(() => { if (cooldown <= 0) return; const t = window.setTimeout(() => setCooldown(c => c - 1), 1000); return () => window.clearTimeout(t); }, [cooldown]);
   const resend = useMutation({
-    mutationFn: () => authRequest("auth/email/verify/resend", {}, session.data?.csrf_token ?? ""),
+    // Verification is by link, and allauth's resend endpoint only re-sends codes; signing in again with the details
+    // just entered (kept in memory only) makes allauth send a fresh link, rate-limited to one a minute.
+    mutationFn: () => authRequest("auth/login", { email, password }, session.data?.csrf_token ?? "", { verificationPending: true }),
     onSuccess: () => { setNote("Sent again. It can take a minute to arrive."); setCooldown(60); },
     onError: error => setNote(error.message),
   });

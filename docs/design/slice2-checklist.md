@@ -53,22 +53,22 @@ chapters, the odometer and the key tag.
 | D2 | The road draws to the current stop, scrubbed by scroll and tied to the eye line; a car marker follows the path | ✅ | rec1/rec2 scroll |
 | D3 | Viewer-aware labels: "You requested", "The owner approved", "Automatically expired" | ✅ | 'You requested', 'Owner approved' |
 | D4 | Notes (refunds, fees) hang off stops as small tags | ✅ | d1 note tag |
-| D5 | Refund status as a gauge: pending (needle moving), delayed (needle at red with a note), refunded (full) | 🟡 | refunded state verified (d4); pending/delayed only by code, no seeded case |
+| D5 | Refund status as a gauge: pending (needle moving), delayed (needle at red with a note), refunded (full) | ✅ | final pass: pending (final/s2-refund-pending), delayed (final/s2-refund-delayed) and refunded (d4) on real cancellations |
 | D6 | Pay now opens the payment sheet (P1–P6) | ✅ | rec2 |
 | D7 | Receipt download | ✅ | link to /download-receipt/24/ (existing endpoint) |
 | D8 | Cancel: the fee and refund roll in (from the cancellation preview) before you confirm | ✅ | d3-cancel-preview, d4 |
 | D9 | Review: star rating and comment after a completed rental | ✅ | d5-review, published |
-| D10 | Status change while viewing (refocus): the ticket flips to the new state | 🟡 | implemented (refetch on focus + flip); not shown in the recording |
+| D10 | Status change while viewing (refocus): the ticket flips to the new state | ✅ | final pass: owner approved while the renter watched; the ticket flipped Pending → Confirmed (final/s2-ticket-flip). The page also polls every 15 s while a trip can change |
 
 ## Auth
 
 | # | Element / animation | Status | Verified |
 | --- | --- | --- | --- |
 | A1 | Split screen: form on the left, a real vehicle photo framed as a key tag on the right | ✅ | a1 |
-| A2 | Sign in (email + password, show/hide), Google when enabled, links to sign up and reset | 🟡 | email/password/show-hide/links ✅; Google button only when enabled (off locally) |
+| A2 | Sign in (email + password, show/hide), Google when enabled, links to sign up and reset | 🟡 | email/password/show-hide/links ✅. Google shows only when GOOGLE_CLIENT_ID/SECRET are set; not enabled here (needs a Google OAuth client, which needs an account) |
 | A3 | Sign up with inline validation (on blur, then live); server errors mapped to their fields | ✅ | a2-register-inline |
 | A4 | Password strength as a fuel gauge | ✅ | a3-fuel-gauge ('Full') |
-| A5 | Verify email: an indicator that blinks until verified; "Resend verification email" with a 60-second cooldown ring | 🟡 | blinking light and 60 s ring ✅; resend not exercised end to end |
+| A5 | Verify email: an indicator that blinks until verified; "Resend verification email" with a 60-second cooldown ring | ✅ | final pass: two emails reached a new test address (sign-up + resend after the 60 s ring); resend re-attempts sign-in, which makes allauth send a fresh link (the code-only resend endpoint returned 409) |
 | A6 | Reset password: request a link, then choose a new password | ✅ | a4-reset |
 | A7 | Success morphs into the next page (sign-in → destination) | ✅ | guard → /sign-in?next=%2Fbookings, returns with viewTransition |
 

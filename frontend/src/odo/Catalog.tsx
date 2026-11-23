@@ -10,7 +10,7 @@ import type { Vehicle } from "../api";
 import { Notice } from "../shared";
 import { activeFilters, vehicleType, withParam } from "./filters";
 import { KeyTag, KeyTagSkeleton } from "./KeyTag";
-import { Odometer, reducedMotion } from "./primitives";
+import { Odometer, plural, reducedMotion } from "./primitives";
 import { Hud, useChapters } from "./world";
 
 const PRICE_MAX = 5000, PRICE_STEP = 50, MAGNET = 500, PULL = 90;
@@ -71,6 +71,25 @@ export function Catalog() {
     if (sheet.current) sheet.current.open = false;
   };
   const filters = activeFilters(params);
+  // Phones: drag the open sheet's grab bar down to dismiss it (past 90 px or a quick flick), else it springs back.
+  const dragSheet = (e: React.PointerEvent<HTMLElement>) => {
+    const el = sheet.current;
+    if (!el?.open) return;
+    const startY = e.clientY, startT = performance.now();
+    let dy = 0;
+    el.style.transition = "none";
+    const move = (ev: PointerEvent) => { dy = Math.max(0, ev.clientY - startY); el.style.transform = `translateY(${dy}px)`; };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+      const flick = dy / Math.max(1, performance.now() - startT) > 0.6;
+      el.style.transition = "transform .28s var(--ease-out)";
+      if (dy > 90 || (flick && dy > 24)) {
+        el.style.transform = "translateY(100%)";
+        window.setTimeout(() => { el.open = false; el.style.transform = ""; el.style.transition = ""; }, 260);
+      } else el.style.transform = "";
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  };
 
   const apply = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -116,7 +135,7 @@ export function Catalog() {
           <span className="od-eyebrow">A ride for every reason</span>
           <h1 tabIndex={-1}>{heading}</h1>
           <div className="od-catalog-count" aria-live="polite">
-            <Odometer value={String(query.data?.count ?? 0).padStart(2, "0")} size="md" label={`${query.data?.count ?? 0} rides`} />
+            <Odometer value={String(query.data?.count ?? 0).padStart(2, "0")} size="md" label={plural(query.data?.count ?? 0, "ride")} />
             <span>{query.data?.count === 1 ? "ride" : "rides"} match</span>
           </div>
           {/* Active filters as road signs: they flip in, and fold away when removed. */}
@@ -138,6 +157,8 @@ export function Catalog() {
           <aside className="od-rail">
             <details className="od-sheet" ref={sheet}>
               <summary>Refine your search{filters.length ? ` · ${filters.length}` : ""}</summary>
+              <div className="od-sheet-grab" onPointerDown={dragSheet} role="button" tabIndex={0} aria-label="Close filters (or drag down)"
+                onKeyDown={e => { if (e.key === "Enter" || e.key === " " || e.key === "Escape") { e.preventDefault(); if (sheet.current) sheet.current.open = false; } }}><span /></div>
               {rail}
             </details>
             <div className="od-rail-desk">

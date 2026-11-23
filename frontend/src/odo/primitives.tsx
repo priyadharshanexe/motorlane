@@ -4,6 +4,9 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 import { drive, onDrive, ScrollTrigger } from "./drive";
 
+/** "1 ride", "2 rides". */
+export const plural = (n: number, word: string, many = word + "s") => `${n} ${n === 1 ? word : many}`;
+
 export const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** The 3D road only where it will run smoothly; everyone else gets the 2D road. */

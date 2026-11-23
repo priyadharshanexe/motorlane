@@ -101,7 +101,9 @@ export type Detail = Booking & { timeline: TimelineEvent[] };
 export function TripDetail() {
   const { id } = useParams();
   const cache = useQueryClient();
-  const query = useQuery({ queryKey: ["booking-detail", id], queryFn: () => api<Detail>(`bookings/${id}/`) });  // refetches on focus
+  const query = useQuery({ queryKey: ["booking-detail", id], queryFn: () => api<Detail>(`bookings/${id}/`),
+    // refetches on focus, and every 15 s while the trip can still change, so the ticket flips while you watch
+    refetchInterval: q => (["Pending", "Confirmed", "In progress"].includes(q.state.data?.status ?? "") ? 15_000 : false) });
   const vehicle = useQuery({ enabled: Boolean(query.data), queryKey: ["vehicle", String(query.data?.vehicle.id)], queryFn: () => api<VehicleDetail>(`vehicles/${query.data!.vehicle.id}/`) });
   const root = useRef<HTMLDivElement>(null);
   const [paying, setPaying] = useState(false);

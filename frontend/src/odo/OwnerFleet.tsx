@@ -403,7 +403,8 @@ export function OwnerMaintenance() {
     if (e.shiftKey && range) setRange([range[0], next]);
     (document.querySelector(`[data-day="${next}"]`) as HTMLElement | null)?.focus();
   };
-  if (fleet.data && !vehicle) return <OwnerPage chapter="Workspace · Maintenance" eyebrow="Maintenance" title="Vehicle not found." lede=""><RoadSign kind="end" title="Not in your fleet." action={<Link className="od-cta" to="/owner/maintenance">The workshop</Link>}>It may be archived or belong to another owner.</RoadSign></OwnerPage>;
+  if (!fleet.data) return <div className="od-page-loading" style={{ minHeight: "100vh" }} />;  // the title wraps once the name is known
+  if (!vehicle) return <OwnerPage chapter="Workspace · Maintenance" eyebrow="Maintenance" title="Vehicle not found." lede=""><RoadSign kind="end" title="Not in your fleet." action={<Link className="od-cta" to="/owner/maintenance">The workshop</Link>}>It may be archived or belong to another owner.</RoadSign></OwnerPage>;
   return (
     <OwnerPage chapter={`Workspace · ${vehicle?.name ?? "Maintenance"}`} eyebrow={`Maintenance · ${vehicle ? plate(vehicle.id) : ""}`} title={vehicle?.name ?? "…"} lede="Drag across the calendar to block days for servicing. Booked days are marked; a block can't cover them.">
       <nav className="od-crumbs" aria-label="Breadcrumb"><Link to="/owner/maintenance" viewTransition>← The workshop</Link></nav>

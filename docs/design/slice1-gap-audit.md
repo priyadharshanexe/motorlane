@@ -55,7 +55,7 @@ Legend: ✅ present · 🟡 partial · ❌ missing
 | Price range slider with magnetic snap and rolling price odometer | direction 3 | ❌ (plain inputs) | — | Two-handle slider, snaps to round values, odometer readouts |
 | Skeleton tags with the exact footprint | direction 4 | ✅ | — | — |
 | Photo lane-wipe reveal | direction 4 | ❌ | — | Clip-path wipe on image load |
-| Phone filter sheet | direction 5 | 🟡 (no drag-to-dismiss) | dark-375-6-catalog-sheet | Sheet keeps tap-to-close; drag-dismiss noted |
+| Phone filter sheet | direction 5 | ✅ (final pass) | final/s1-sheet-open, s1-sheet-dragging | Drag the grab bar down past 90 px (or flick) to dismiss; shorter drags spring back; Esc/Enter on the bar closes it |
 | "Road ends" barrier draws itself | direction 6 | ✅ | — | — |
 | Backdrop + HUD | lab | ❌ | dark-1920-5-catalog | Shared shell pieces |
 
@@ -106,7 +106,7 @@ Verified in headless Chrome against port 8000 (stills in `docs/design/slice1/` a
 | Cold-load CLS (mobile, slow 4G, 4× CPU) | ✅ ~0.9 → ≤ 0.003 (the footer showed while a page chunk loaded; pages now reserve the viewport) |
 | LCP (same throttling) | ❌ home ~6.1 s, catalog ~6.3 s, detail ~8.5 s (FCP ~4.7 s: the main JS bundle on slow 4G). Budget 2.0–2.5 s: needs bundle splitting / preloading, open |
 | Frame rate, home while scrolling (1920×870) | x1: 85 fps avg, p95 20.8 ms (misses 60 Hz on a few frames); x4: 44 fps, 6 long tasks. Open |
-| Still open | Drag-to-dismiss on the phone filter sheet; draggable-with-inertia was added for the rack only |
+| Still open | Nothing: drag-to-dismiss on the phone filter sheet landed in the final pass |
 
 ## Second pass (review feedback)
 

@@ -199,3 +199,9 @@
 .od-window-none { font: 500 13px var(--text) !important; color: #8E939B; }
 .od-upload > span:not(.od-upload-road) { color: var(--chalk); }
 .od-day { aspect-ratio: auto; height: clamp(36px, 4.2vw, 52px); }
+.od-sheet-grab { display: none; }
+@media (max-width: 900px) {
+  .od-sheet[open] .od-sheet-grab { display: grid; place-items: center; position: sticky; top: 0; z-index: 1; height: 28px; margin-top: -6px; touch-action: none; cursor: grab; background: var(--raised); }
+  .od-sheet-grab span { width: 44px; height: 5px; border-radius: 3px; background: var(--dust); }
+  .od-sheet[open] summary { position: sticky; top: 0; }
+}

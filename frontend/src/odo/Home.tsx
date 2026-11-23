@@ -11,7 +11,7 @@ import type { Vehicle } from "../api";
 import { Notice } from "../shared";
 import { drive, gsap, IDLE_KMH, MAX_KMH, onDrive, ScrollTrigger } from "./drive";
 import { KeyTag, KeyTagSkeleton } from "./KeyTag";
-import { canRun3D, Odometer, reducedMotion, TripMeter, useOnce } from "./primitives";
+import { canRun3D, Odometer, plural, reducedMotion, TripMeter, useOnce } from "./primitives";
 import { useTheme } from "./theme";
 import { TripChapter } from "./TripChapter";
 import { Hud, useChapters } from "./world";
@@ -153,7 +153,7 @@ function Hero() {
           </div>
           <div className="od-count" aria-live="polite">
             <small>{datesReady ? "Free for your dates" : "On the road now"}</small>
-            <Odometer value={count} label={`${available.data?.count ?? 0} vehicles`} />
+            <Odometer value={count} label={plural(available.data?.count ?? 0, "vehicle")} />
           </div>
           <div className="od-cluster">
             <label className="od-field"><small>Location</small><input name="location" placeholder="Any town" autoComplete="off" /></label>

@@ -11,7 +11,7 @@ import type { Booking, BookingValue, FleetVehicle } from "../api";
 import { formData, useWrite } from "../requests";
 import { rentalToday } from "../rentalDates";
 import { Photo } from "../shared";
-import { Odometer, reducedMotion } from "./primitives";
+import { Odometer, plural, reducedMotion } from "./primitives";
 import { ErrorSign, RoadSign } from "./states";
 import { State, TimelineRoad } from "./Trips";
 import type { Detail } from "./Trips";
@@ -322,13 +322,13 @@ export function OwnerValue() {
         <div className="od-value">
           <section className="od-value-totals" aria-live="polite">
             <Gauge label={hover ? hover.vehicle__name : "Total booking value"} value={hover ? Number(hover.value) : total} max={total} display={rupees(hover ? Number(hover.value) : total)} tone="lane" />
-            <p className="mono">{hover ? `${hover.bookings} completed rental${hover.bookings === 1 ? "" : "s"}` : `${rows.reduce((s, r) => s + r.bookings, 0)} completed · ${rows.length} vehicle${rows.length === 1 ? "" : "s"}`}</p>
+            <p className="mono">{hover ? `${plural(hover.bookings, "completed rental")}` : `${rows.reduce((s, r) => s + r.bookings, 0)} completed · ${plural(rows.length, "vehicle")}`}</p>
           </section>
           <ol className="od-value-bars" aria-label="Booking value by vehicle">
             {rows.map((row, i) => (
               <li key={row.vehicle_id}>
                 <button type="button" onMouseEnter={() => setHover(row)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(row)} onBlur={() => setHover(null)}
-                  aria-label={`${row.vehicle__name}: ${money(row.value)} from ${row.bookings} rentals`}>
+                  aria-label={`${row.vehicle__name}: ${money(row.value)} from ${plural(row.bookings, "rental")}`}>
                   <span className="od-value-name">{row.vehicle__name}</span>
                   <span className="od-value-track"><span className="od-value-fill" style={{ transform: `scaleX(${grown ? Number(row.value) / top : 0})`, transitionDelay: `${i * 70}ms` }} /></span>
                   <span className="od-value-amt mono">{rupees(Number(row.value))}</span>

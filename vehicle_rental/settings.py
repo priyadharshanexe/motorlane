@@ -191,6 +191,7 @@ LOGOUT_REDIRECT_URL = "home"
 ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+ACCOUNT_RATE_LIMITS = {"confirm_email": "1/60s/key"}  # one verification email a minute: matches the resend ring
 EMAIL_BACKEND = os.getenv(
     "DJANGO_EMAIL_BACKEND",
     "django.core.mail.backends.console.EmailBackend" if DEBUG
