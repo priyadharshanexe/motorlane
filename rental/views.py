@@ -158,5 +158,6 @@ def react_app(request):
             hints, static = "", ""
         html = html.replace(ROUTE_HINTS, hints, 1).replace('<div id="root"></div>', f'<div id="root">{static}</div>', 1)
     response = HttpResponse(html, content_type="text/html")
-    response["Cache-Control"] = "no-cache"
+    # Signed in: never keep the page (including the back-forward cache), so Back after signing out cannot show it.
+    response["Cache-Control"] = "no-store, private" if request.user.is_authenticated else "no-cache"
     return response

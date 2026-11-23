@@ -73,6 +73,7 @@ MIDDLEWARE = [
     'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'vehicle_rental.security.PrivateNoStoreMiddleware',
 ]
 
 ROOT_URLCONF = 'vehicle_rental.urls'
@@ -191,6 +192,8 @@ LOGOUT_REDIRECT_URL = "home"
 ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+# One cache shared by every web worker (gunicorn runs several): sign-in rate limits must see all attempts.
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "django_cache"}}
 ACCOUNT_RATE_LIMITS = {"confirm_email": "1/60s/key"}  # one verification email a minute: matches the resend ring
 EMAIL_BACKEND = os.getenv(
     "DJANGO_EMAIL_BACKEND",

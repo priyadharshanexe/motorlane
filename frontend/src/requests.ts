@@ -26,3 +26,23 @@ export function useWrite<Result = unknown>() {
     },
   })
 }
+
+// One channel per tab: a BroadcastChannel never receives its own messages, so this tab is not told about its own change.
+const authChannel: BroadcastChannel | null = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('motorlane-auth')
+
+/** Tell every other open tab that this browser signed in or out, so they drop (or reload) account data at once. */
+export function announceAuth(change: 'in' | 'out') {
+  authChannel?.postMessage(change)  // old browsers: other tabs catch up when focused
+}
+
+/** Run when another tab signs in or out. */
+export function onAuthElsewhere(listener: () => void) {
+  if (authChannel) authChannel.onmessage = listener
+}
+
+/** Sign out through the API, then tell the other tabs (only once the server has ended the session) and go home. */
+export async function signOut(csrfToken: string) {
+  await fetch('/auth/browser/v1/auth/session', { method: 'DELETE', credentials: 'same-origin', headers: { 'X-CSRFToken': csrfToken } })
+  announceAuth('out')
+  window.location.assign('/app/')
+}

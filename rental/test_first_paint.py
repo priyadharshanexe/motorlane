@@ -28,7 +28,6 @@ class FirstPaintTests(TestCase):
     def get(self, path):
         response = self.client.get(path, secure=True, HTTP_ACCEPT="text/html")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Cache-Control"], "no-cache")
         return response.content.decode()
 
     def initial(self, html):
@@ -63,3 +62,9 @@ class FirstPaintTests(TestCase):
         html = self.get("/app/owner")
         self.assertIn('<div id="root"></div>', html)
         self.assertNotIn("modulepreload", html)
+
+    def test_signed_in_pages_are_never_stored(self):
+        from .testing import make_profile
+        self.assertEqual(self.client.get("/app/", secure=True)["Cache-Control"], "no-cache")
+        self.client.force_login(make_profile("first-paint-renter").user)
+        self.assertEqual(self.client.get("/app/bookings", secure=True)["Cache-Control"], "no-store, private")

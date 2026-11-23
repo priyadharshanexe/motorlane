@@ -8,25 +8,62 @@ import type { FocusEvent, FormEvent, ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, authRequest, signIn } from "../api";
 import type { Vehicle } from "../api";
-import { useSession } from "../requests";
+import { announceAuth, useSession } from "../requests";
 import { Photo } from "../shared";
 import { strength, validate } from "./authRules";
 import { reducedMotion } from "./primitives";
 
-function AuthFrame({ children }: { children: ReactNode }) {
-  const tag = useQuery({ queryKey: ["vehicles", "sort=newest"], queryFn: () => api<{ results: Vehicle[] }>("vehicles/?sort=newest") });
-  const vehicle = tag.data?.results.find(v => v.cover) ?? tag.data?.results[0];
+const PROOF: [string, string, string][] = [
+  ["live", "Live availability", "Free dates and times, cleaning included"],
+  ["road", "Book on the time road", "Drag pickup and return; the price rolls"],
+  ["pay", "Payments with real refunds", "Deposit back after the trip, fair cancellations"],
+  ["owner", "Tools for owners", "Departures board, pickup windows, value report"],
+];
+
+/** The scene beside every account page: the highway at dusk or noon with the lane flowing, an overhead gantry with the
+ *  pitch, and three real listings hanging as key tags on a rack. */
+function AuthFrame({ children, unlocked = false }: { children: ReactNode; unlocked?: boolean }) {
+  const rack = useQuery({ queryKey: ["vehicles", "sort=rating"], queryFn: () => api<{ results: Vehicle[] }>("vehicles/?sort=rating") });
+  const tags = (rack.data?.results ?? []).filter(v => v.cover).slice(0, 3);
   return (
-    <div className="od-page od-auth" data-chapter="Checkpoint · Your account">
-      <section className="od-auth-form">{children}</section>
-      <div className="od-auth-art" aria-hidden="true">
-        <div className="od-auth-tag">
-          <span className="od-tag-hole" />
-          {vehicle ? <Photo vehicle={vehicle} priority /> : <div className="od-skel-photo" />}
-          <span className="od-plate mono">{vehicle ? `ML·${String(vehicle.id).padStart(4, "0")}` : "ML·0000"}</span>
-          <b>{vehicle?.name ?? "Your next ride"}</b>
+    <div className={`od-auth${unlocked ? " unlocked" : ""}`} data-chapter="Checkpoint · Your account">
+      <section className="od-auth-panel">
+        <span className="od-auth-key" aria-hidden="true"><span className="ring" /><span className="bit" /></span>
+        {children}
+      </section>
+      <aside className="od-auth-scene" aria-label="About Motorlane">
+        <svg className="od-auth-road" viewBox="0 0 800 420" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+          <polygon className="verge" points="0,420 0,190 800,190 800,420" />
+          <polygon className="tarmac" points="120,420 372,190 428,190 680,420" />
+          <line className="edge" x1="138" y1="420" x2="376" y2="190" /><line className="edge" x1="662" y1="420" x2="424" y2="190" />
+          <line className="lane" x1="400" y1="420" x2="400" y2="190" />
+          {[0, 1, 2, 3].map(i => <g key={i} className="pole" style={{ animationDelay: `${-i * 1.1}s` }}><line x1="0" y1="0" x2="0" y2="-120" /><line x1="0" y1="-120" x2="28" y2="-120" /><circle cx="28" cy="-118" r="5" /></g>)}
+        </svg>
+        <div className="od-auth-gantry" aria-hidden="true">
+          <span className="post" /><span className="post right" />
+          <span className="sign"><b>MOTORLANE</b><small>Local cars and bikes · Tamil Nadu</small><small lang="ta">வாடகை வாகனங்கள்</small></span>
         </div>
-      </div>
+        <div className="od-auth-pitch">
+          <h2>Rent a car or a bike from a local owner, and see every step of the trip.</h2>
+          <ul>
+            {PROOF.map(([glyph, title, text]) => (
+              <li key={glyph}><span className={`od-glyph od-glyph-${glyph}`} aria-hidden="true">{glyph === "pay" ? <i>₹</i> : glyph === "owner" ? <i>A</i> : <i />}</span>
+                <span><b>{title}</b><small>{text}</small></span></li>
+            ))}
+          </ul>
+        </div>
+        <div className="od-auth-rack" aria-hidden="true">
+          <span className="rail" />
+          {tags.map((v, i) => (
+            <span className="od-rack-tag" key={v.id} style={{ "--i": i } as React.CSSProperties}>
+              <span className="hook" />
+              <Photo vehicle={v} />
+              <span className="mono">ML·{String(v.id).padStart(4, "0")}</span>
+              <b>{v.name}</b>
+            </span>
+          ))}
+        </div>
+      </aside>
     </div>
   );
 }
@@ -86,23 +123,30 @@ export function SignInPage() {
   const [params] = useSearchParams();
   const next = safeNext(params.get("next"));
   const inline = useInline();
+  const [unlocked, setUnlocked] = useState(false);
   const login = useMutation({
     mutationFn: (data: FormData) => signIn(String(data.get("email")), String(data.get("password")), session.data?.csrf_token ?? ""),
-    onSuccess: async () => { await cache.invalidateQueries({ queryKey: ["session"] }); navigate(next, { replace: true, viewTransition: !reducedMotion() }); },
+    onSuccess: async () => {
+      announceAuth("in");
+      setUnlocked(true);  // the key tag turns and the panel says unlocked, then the page drives on
+      if (!reducedMotion()) await new Promise(resolve => window.setTimeout(resolve, 650));
+      await cache.invalidateQueries({ queryKey: ["session"] });
+      navigate(next, { replace: true, viewTransition: !reducedMotion() });
+    },
     onError: error => inline.setErrors(mapServerError(error.message)),
   });
   if (session.isPending) return <div className="od-page-loading" style={{ minHeight: "100vh" }} />;
-  if (session.data?.user) return <Navigate to={next} replace />;
+  if (session.data?.user && !unlocked) return <Navigate to={next} replace />;
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (inline.all(event.currentTarget, ["email", "password"])) login.mutate(new FormData(event.currentTarget)); };
   return (
-    <AuthFrame>
-      <span className="od-eyebrow">Welcome back</span>
+    <AuthFrame unlocked={unlocked}>
+      <span className="od-eyebrow">{unlocked ? "Unlocked" : "Welcome back"}</span>
       <h1 tabIndex={-1}>Sign in.</h1>
       <form className="od-form" onSubmit={submit} noValidate>
         <Field label="Email" name="email" type="email" autoComplete="email" error={inline.errors.email} onBlur={inline.onBlur} onChange={inline.onChange} />
         <Field label="Password" name="password" type="password" autoComplete="current-password" error={inline.errors.password} onBlur={inline.onBlur} onChange={inline.onChange} />
         {inline.errors.form && <p className="od-error" role="alert">{inline.errors.form}</p>}
-        <button className="od-cta" disabled={login.isPending}>{login.isPending ? "Signing in…" : "Sign in"}</button>
+        <button className="od-cta" disabled={login.isPending}>{unlocked ? "Unlocked ✓" : login.isPending ? "Signing in…" : "Sign in"}</button>
       </form>
       {session.data?.google_enabled && (
         <form method="post" action="/accounts/google/login/" className="od-google">

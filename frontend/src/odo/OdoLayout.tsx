@@ -8,7 +8,7 @@ import "@fontsource-variable/archivo/wdth.css";
 import "@fontsource-variable/public-sans";
 import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/700.css";
-import { useSession } from "../requests";
+import { signOut, useSession } from "../requests";
 import RouteErrorBoundary from "../RouteErrorBoundary";
 import { drive, getLenis, MAX_KMH, onDrive, onScreen, ScrollTrigger, startDrive, stopDrive } from "./drive";
 import { reducedMotion } from "./primitives";
@@ -17,6 +17,10 @@ import { Backdrop } from "./world";
 import "./odo.css";
 import "./slice2.css";
 import "./slice3.css";
+import "./auth.css";
+
+/** Sign-in, sign-up, verify and reset fill one screen with their own scene, so they have no footer. */
+const AUTH_ROUTES = /^\/(sign-in|register|verify-email|reset-password)(\/|$)/;
 
 export function OdoLayout({ children }: { children: ReactNode }) {
   return <ThemeProvider><Shell>{children}</Shell></ThemeProvider>;
@@ -98,11 +102,7 @@ function Shell({ children }: { children: ReactNode }) {
               <Link to="/owner">Owner workspace</Link>
               <Link to="/account">Settings</Link>
               {session.data?.user ? (
-                <form method="post" action="/accounts/logout/">
-                  <input type="hidden" name="csrfmiddlewaretoken" value={session.data.csrf_token} />
-                  <input type="hidden" name="next" value="/app/" />
-                  <button className="od-menu-signout">Sign out</button>
-                </form>
+                <button type="button" className="od-menu-signout" onClick={() => void signOut(session.data!.csrf_token)}>Sign out</button>
               ) : <Link to="/sign-in">Sign in / Create account</Link>}
             </div>
           </details>
@@ -112,7 +112,7 @@ function Shell({ children }: { children: ReactNode }) {
         {/* keyed by path, not location.key: changing filters must not remount the page (focus, FLIP reflow) */}
         <RouteErrorBoundary key={pathname}>{children}</RouteErrorBoundary>
       </main>
-      <TollGate />
+      {!AUTH_ROUTES.test(pathname) && <TollGate />}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { Link, NavLink, Navigate, useLocation } from "react-router-dom";
 import { Busy, Notice } from "./shared";
-import { useSession } from "./requests";
+import { signOut, useSession } from "./requests";
 import RouteErrorBoundary from "./RouteErrorBoundary";
 
 export function RequireSession({ children }: { children: ReactNode }) {
@@ -106,15 +106,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   <Link to="/owner">Owner workspace</Link>
                   <Link to="/account">Settings</Link>
                   {data?.user ? (
-                    <form method="post" action="/accounts/logout/">
-                      <input
-                        type="hidden"
-                        name="csrfmiddlewaretoken"
-                        value={data.csrf_token}
-                      />
-                      <input type="hidden" name="next" value="/app/" />
-                      <button className="secondary">Sign out</button>
-                    </form>
+                    <button type="button" className="secondary" onClick={() => void signOut(data.csrf_token)}>Sign out</button>
                   ) : (
                     <Link to="/sign-in">Sign in / Create account</Link>
                   )}

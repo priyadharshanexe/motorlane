@@ -217,20 +217,8 @@
 .od-stars-word { margin-left: 10px; color: var(--dust); }
 
 /* ===== Auth ===== */
-.od-auth { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: center; }
-.od-auth-form { display: grid; gap: 16px; max-width: 460px; }
-.od-auth-form h1 { font-weight: 900 !important; font-size: clamp(40px, 5vw, 68px) !important; font-stretch: 122%; }
-.od-auth-form h1:focus { outline: none; }
-.od-input-row { display: flex; gap: 6px; } .od-input-row input { flex: 1; }
-.od-app .od-show { border: 1px solid var(--kerb); background: transparent; color: var(--chalk); padding: 0 12px; min-height: 44px; border-radius: 4px; }
 .od-auth-links { color: var(--dust); }
 .od-google { display: grid; }
-.od-auth-art { display: grid; place-items: center; perspective: 900px; }
-.od-auth-tag { position: relative; width: min(420px, 90%); background: var(--raised); border: 1px solid var(--kerb); padding-bottom: 18px; transform: rotate(-3deg);
-  transform-origin: 50% 0; animation: od-hang 4s ease-in-out infinite; display: grid; gap: 8px; box-shadow: 0 30px 60px -30px #000; }
-.od-auth-tag .photo { width: 100%; aspect-ratio: 1.4; object-fit: cover; display: block; clip-path: polygon(0 0, 100% 0, 100% 92%, 0 100%); }
-.od-auth-tag .od-plate { margin: -14px 0 0 16px; justify-self: start; }
-.od-auth-tag b { padding: 0 18px; font: 800 22px var(--display); text-transform: uppercase; }
 @keyframes od-hang { 50% { transform: rotate(-1deg); } }
 .od-fuel { display: flex; align-items: center; gap: 8px; color: var(--dust); font-size: 13px; }
 .od-fuel svg { width: 54px; } .od-fuel .arc { fill: none; stroke: var(--kerb); stroke-width: 5; }
@@ -247,9 +235,8 @@
 
 /* ===== Phones ===== */
 @media (max-width: 1000px) {
-  .od-sheet-grid, .od-trip-grid, .od-auth { grid-template-columns: 1fr; }
+  .od-sheet-grid, .od-trip-grid { grid-template-columns: 1fr; }
   .od-receipt { position: static; }
-  .od-auth-art { order: -1; } .od-auth-tag { width: min(300px, 80%); }
 }
 @media (max-width: 760px) {
   .od-page { padding: 88px 16px 60px; }
@@ -263,7 +250,7 @@
   .od-pay-key { right: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .od-paysheet, .od-paysheet-scrim, .od-receipt-lines > div, .od-swing-tag, .od-tl-note, .od-roadsign svg > *, .od-auth-tag { animation: none !important; }
+  .od-paysheet, .od-paysheet-scrim, .od-receipt-lines > div, .od-swing-tag, .od-tl-note, .od-roadsign svg > * { animation: none !important; }
   .phase-paid .od-pay-key { animation: none !important; opacity: 1; transform: translateY(170px); }
   .phase-paid .od-pay-stamp { animation: none !important; opacity: 1; transform: rotate(-12deg); }
 }

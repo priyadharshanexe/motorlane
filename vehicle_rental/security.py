@@ -38,3 +38,19 @@ class ContentSecurityPolicyMiddleware:
         header = "Content-Security-Policy-Report-Only" if settings.CSP_REPORT_ONLY else "Content-Security-Policy"
         response.headers.setdefault(header, build_policy(request.csp_nonce))
         return response
+
+
+class PrivateNoStoreMiddleware:
+    """API, auth and receipt responses are never stored by the browser or a shared cache, unless a view set its
+    own caching. After signing out, the back button and a shared computer cannot show another account's data."""
+
+    PREFIXES = ("/api/", "/auth/", "/download-receipt/")
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if request.path.startswith(self.PREFIXES) and not response.has_header("Cache-Control"):
+            response["Cache-Control"] = "no-store, private"
+        return response
