@@ -50,6 +50,8 @@ export function OwnerFleet() {
     <OwnerPage chapter="Workspace · Fleet" eyebrow="Your fleet" title="Keys on the board." lede="Every vehicle you list, with its rates and where it stands today."
       action={<button type="button" className="od-cta" onClick={() => setParams({ edit: "new" })}>List a vehicle</button>}>
       {editing && <ListingSheet key={edit} vehicle={editing === "new" ? undefined : editing} onClose={() => setParams({})} />}
+      {/* opening a listing by link: wait for the fleet so the sheet does not appear above content and push it down */}
+      {edit && edit !== "new" && !fleet.data ? <div style={{ minHeight: "100vh" }} aria-busy="true" /> : <>
       <div className="od-seg od-queue" role="group" aria-label="Show">
         <button type="button" aria-pressed={show === "active"} onClick={() => setShow("active")}>On the board</button>
         <button type="button" aria-pressed={show === "archived"} onClick={() => setShow("archived")}>Archived</button>
@@ -62,6 +64,7 @@ export function OwnerFleet() {
       <ul className="od-fleet">
         {vehicles.map((v, i) => <FleetTag key={v.id} vehicle={v} index={i} blocks={blocksFor(v.id)} onEdit={() => setParams({ edit: String(v.id) })} />)}
       </ul>
+      </>}
     </OwnerPage>
   );
 }
