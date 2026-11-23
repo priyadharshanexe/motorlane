@@ -1,8 +1,6 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
 
-// The design-concept lab is its own chunk and is not linked from the app.
-const Lab = lazy(() => import("./lab/Lab"));
 // The redesigned public pages (slice 1 of the Odometer redesign): their own shell, fonts and motion, each a lazy chunk.
 const OdoLayout = lazy(() => import("./odo/OdoLayout").then(m => ({ default: m.OdoLayout })));
 const Home = lazy(() => import("./odo/Home").then(m => ({ default: m.Home })));
@@ -44,7 +42,6 @@ export default function App() {
   return (
     <BrowserRouter basename="/app">
       <Routes>
-      <Route path="lab" element={<Suspense fallback={null}><Lab /></Suspense>} />
       <Route element={<OdoShell />}>
         <Route index element={<Home />} />
         <Route path="vehicles" element={<Catalog />} />

@@ -62,8 +62,8 @@ export default defineConfig(({ command }) => ({
         // Vendor code in its own long-lived chunks: an app change no longer invalidates React or the router in cache.
         advancedChunks: {
           groups: [
-            { name: 'vendor-react', test: /node_modules[\/](react|react-dom|scheduler)[\/]/ },
-            { name: 'vendor-app', test: /node_modules[\/](react-router|@tanstack)[\/]/ },
+            { name: 'vendor-react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            { name: 'vendor-app', test: /node_modules[\\/](react-router|@tanstack)[\\/]/ },
           ],
         },
       },

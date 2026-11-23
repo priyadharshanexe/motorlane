@@ -87,6 +87,7 @@ with an explanation and never colour alone. All pairs were checked at WCAG AA (4
 Figma can't be operated from here, so the **design tool is code**: a `/lab` route with live,
 animated prototypes of each signature interaction, built on the real API data. The user reviews
 **screen recordings** (Playwright video, 1440 px and 390 px) plus the live `/lab` page.
+(The lab was removed in the final pass once every prototype lived in the real pages.)
 
 | Need | Choice | Why (and the alternatives considered) |
 | --- | --- | --- |
