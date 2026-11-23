@@ -13,5 +13,6 @@ def drop(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    atomic = False  # MySQL cannot run DDL (create or drop the table) inside a transaction
     dependencies = [("rental", "0031_backfill_money_events")]
     operations = [migrations.RunPython(create, drop)]
