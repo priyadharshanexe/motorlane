@@ -46,7 +46,8 @@ function preloadPublicShell(shell: string, pages: Record<string, string>): Plugi
         if (!bundle) return []
         const shellSet = closure(bundle, chunkFor(bundle, shell))
         const tags: HtmlTagDescriptor[] = [...shellSet.files].map(file => ({ tag: 'link', attrs: { rel: 'modulepreload', crossorigin: true, href: base + file }, injectTo: 'head' }))
-        shellSet.css.forEach(file => tags.push({ tag: 'link', attrs: { rel: 'preload', as: 'style', href: base + file }, injectTo: 'head' }))
+        // render-blocking on purpose: the server's static first frame uses these classes (see rental/views.py)
+        shellSet.css.forEach(file => !/(^|\/)index-[^/]*\.css$/.test(file) && tags.push({ tag: 'link', attrs: { rel: 'stylesheet', href: base + file }, injectTo: 'head' }))
         return tags
       },
     },

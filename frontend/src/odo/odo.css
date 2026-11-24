@@ -5,7 +5,7 @@
   --ease-out: cubic-bezier(.2, .8, .2, 1);
   --ease-spring: cubic-bezier(.25, 1.35, .45, 1);
   --t-quick: .25s; --t-base: .5s; --t-slow: .9s;
-  --display: "Archivo Variable", "Archivo", system-ui, sans-serif;
+  --display: "Archivo Variable", "Archivo", "Archivo Fallback", system-ui, sans-serif;
   --text: "Public Sans Variable", "Public Sans", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
   --gutter: clamp(16px, 4vw, 64px);

@@ -23,25 +23,33 @@ if (!root) throw new Error('Application root is missing')
 // the real page has its headline and the static photo has loaded, so the page never flashes blank while JS starts.
 const staticFirst = root.querySelector<HTMLElement>('.static-first')
 if (staticFirst) {
-  document.body.appendChild(staticFirst)
-  staticFirst.classList.add('static-overlay')
+  // a separate fixed layer around it, so the frame keeps its own page layout inside
+  const layer = document.createElement('div')
+  layer.className = 'static-overlay'
+  layer.appendChild(staticFirst)
+  document.body.appendChild(layer)
   const photo = staticFirst.querySelector('img')
   const started = performance.now()
   const release = () => {
     observer.disconnect()
-    staticFirst.classList.add('out')
-    window.setTimeout(() => staticFirst.remove(), 260)
+    window.clearInterval(poll)
+    layer.classList.add('out')
+    window.setTimeout(() => layer.remove(), 260)
   }
   const check = () => {
     const pageReady = Boolean(root.querySelector('h1'))
-    const photoReady = !photo || photo.complete
+    // the app's own first photo (the sharp rendition) must be on screen too, so the hand-off shows no empty box
+    const appPhoto = root.querySelector<HTMLImageElement>('.od-results img, .od-gallery img')
+    const photoReady = (!photo || photo.complete) && (!appPhoto || appPhoto.complete)
     if (pageReady && (photoReady || performance.now() - started > 2500)) release()
   }
   const observer = new MutationObserver(check)
   observer.observe(root, { childList: true, subtree: true })
   photo?.addEventListener('load', check)
+  const poll = window.setInterval(check, 150)  // the app's photo finishing is not a DOM change
   photo?.addEventListener('error', check)
-  window.setTimeout(release, 8000)  // never leave it up
+  // If the app has mounted but never reports ready, still hand over; if the JS never runs, the frame stays (it works).
+  window.setTimeout(() => { if (root.childElementCount) release() }, 8000)
 }
 createRoot(root).render(
   <StrictMode><QueryClientProvider client={queryClient}><App /></QueryClientProvider></StrictMode>,

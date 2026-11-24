@@ -1,5 +1,6 @@
 """Server-rendered pages. Business logic lives in services/ and selectors.py."""
 import json
+from decimal import Decimal
 import logging
 import re
 
@@ -82,8 +83,8 @@ def _api_json(view, request, **kwargs):
 
 
 def _image_preload(small, large, sizes):
-    return (f'<link rel="preload" as="image" fetchpriority="high" href="{escape(large)}" '
-            f'imagesrcset="{escape(small)} 400w, {escape(large)} 1200w" imagesizes="{sizes}">')
+    """The first photo's small rendition, which the static first frame shows (see _photo)."""
+    return f'<link rel="preload" as="image" fetchpriority="high" href="{escape(small)}">'
 
 
 def _route_hints(request, rest):
@@ -117,31 +118,114 @@ def _route_hints(request, rest):
     if parsed:
         payload = json.dumps(parsed).replace("</", "<\\/")
         tags.append(f'<script id="initial-data" type="application/json">{payload}</script>')
-    return "".join(tags), _static_first(route, next(iter(parsed.values()), None))
+    return "".join(tags), _static_first(route, next(iter(parsed.values()), None), getattr(request, "csp_nonce", ""), request.GET.get("type"))
 
 
-def _img(photo, sizes, alt, ratio=None, wide=False):
-    style = f' style="aspect-ratio: {ratio}"' if ratio else ""
-    return (f'<img src="{escape(photo["large"])}" srcset="{escape(photo["small"])} 400w, {escape(photo["large"])} 1200w" '
-            f'sizes="{sizes}" alt="{escape(alt)}" fetchpriority="high"{style}' + (' class="wide"' if wide else "") + '>')
+HANG = [-1.4, 0.6, 1.2, -0.8, 1.6, -1.1]  # the key tags' resting angles (frontend/src/odo/KeyTag.tsx)
 
 
-def _static_first(route, data):
-    """The page's headline (and first photo) as plain HTML, so it paints before the JS has loaded."""
+def _odometer(value, label):
+    """Server copy of the app's Odometer: one wheel per digit, so the count has its real size on first paint."""
+    wheels = "".join(
+        f'<span class="odo-wheel" aria-hidden="true"><span class="odo-strip" style="--digit: {c}">'
+        + "".join(f"<span>{d}</span>" for d in range(10)) + "</span></span>"
+        if c.isdigit() else f'<span class="odo-sep" aria-hidden="true">{escape(c)}</span>' for c in value)
+    return f'<span class="odo odo-md" aria-label="{escape(label)}" role="img">{wheels}</span>'
+
+
+def _photo(vehicle, sizes, first=False, extra_style=""):
+    cover = vehicle.get("cover")
+    if not cover:
+        return f'<div class="photo placeholder">{escape(vehicle.get("vehicle_type", ""))}</div>'
+    dims = f' width="{cover["width"]}" height="{cover["height"]}"' if cover.get("width") and cover.get("height") else ""
+    colour = f"background-color: {escape(cover['color'])};" if cover.get("color") else ""
+    if first:  # the small rendition paints at the card's real size within a second; the app's sharp copy replaces it
+        return (f'<img class="photo" src="{escape(cover["small"])}"{dims} alt="{escape(vehicle.get("name", ""))}" fetchpriority="high" '
+                f'loading="eager" decoding="async" style="{colour}{extra_style}">')
+    return (f'<img class="photo" src="{escape(cover["small"])}" srcset="{escape(cover["small"])} 400w, {escape(cover["large"])} 1200w" '
+            f'sizes="{sizes}"{dims} alt="{escape(vehicle.get("name", ""))}" loading="lazy" decoding="async" style="{colour}{extra_style}">')
+
+
+def _key_tag(vehicle, index):
+    """Server copy of the app's KeyTag markup (same classes, so the same size and place in the grid)."""
+    meta = " · ".join(x for x in (vehicle.get("location") or "Location on request", vehicle.get("transmission"),
+                                    f'{vehicle["seats"]} seats' if vehicle.get("seats") else None, vehicle.get("fuel_type")) if x)
+    price = f"{Decimal(vehicle.get('price_per_day') or 0):,.0f}"
+    rating = (f'<span aria-hidden="true">★</span> {Decimal(vehicle["rating"]):.1f} · {vehicle["review_count"]} review{"" if vehicle["review_count"] == 1 else "s"}'
+              if vehicle.get("rating") else " New listing")
+    url = f'/app/vehicles/{vehicle["id"]}'
+    return (f'<article class="od-tag" data-vehicle-type="{escape(vehicle.get("vehicle_type", ""))}" style="--hang: {HANG[index % len(HANG)]}deg">'
+            '<span class="od-tag-hole" aria-hidden="true"></span>'
+            f'<div class="od-tag-media loaded"><a href="{url}" tabindex="-1" aria-label="View {escape(vehicle.get("name", ""))}">{_photo(vehicle, CARD_SIZES, index == 0)}</a>'
+            f'<span class="od-tag-type">{escape(vehicle.get("vehicle_type", ""))}</span></div>'
+            f'<span class="od-plate mono" aria-hidden="true">ML·{vehicle["id"]:04d}</span>'
+            f'<h3><a href="{url}">{escape(vehicle.get("name", ""))}</a></h3>'
+            f'<p class="od-tag-meta">{escape(meta)}</p>'
+            f'<div class="od-tag-foot"><span class="od-tag-price"><span class="mono">₹{price}</span><small>per day</small></span>'
+            f'<span class="vehicle-rating">{rating}</span></div></article>')
+
+
+THEME_SCRIPT = ("(function(a){var t;try{t=localStorage.getItem('motorlane-theme')}catch(e){}"
+                "if(t!=='dark'&&t!=='light')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';"
+                "a.dataset.theme=t;if(matchMedia('(prefers-reduced-motion: reduce)').matches)a.dataset.motion='reduced';"
+                "if(t==='light'){var b=a.querySelector('.od-theme');b.firstChild.textContent='☾';b.lastChild.textContent='Night'}"
+                "})(document.currentScript.parentElement)")
+
+
+def _shell(nonce, page):
+    """The app's shell (theme, skip link, header) around a page, with the app's own classes."""
+    header = (
+        '<a class="od-skip" href="#main">Skip to content</a>'
+        '<header class="od-header"><a class="od-brand" href="/app/"><svg class="od-lanemark" viewBox="0 0 40 40" aria-hidden="true">'
+        '<path class="od-lanemark-m" d="M6 34 L6 6 L20 22 L34 6 L34 34"></path><path class="od-lanemark-lane" d="M20 25 V34"></path></svg> '
+        '<span>MOTORLANE</span></a><nav class="od-nav" aria-label="Main navigation"><a href="/app/">Discover</a>'
+        '<a href="/app/vehicles?type=Car">Cars</a><a href="/app/vehicles?type=Bike">Bikes</a></nav>'
+        '<div class="od-header-actions"><a class="od-host" href="/app/owner/fleet?edit=new">List your vehicle</a>'
+        '<button type="button" class="od-theme" aria-label="Switch colours"><span aria-hidden="true">☀</span><span class="od-theme-label">Day</span></button>'
+        '<details class="od-menu"><summary aria-label="Open navigation menu"><span class="od-burger" aria-hidden="true"><i></i><i></i><i></i></span>'
+        '<span class="od-menu-label">Menu</span></summary></details></div></header>')
+    return (f'<div class="od-app static-first" data-theme="dark" data-motion="full">{header}'
+            f'<script nonce="{escape(nonce)}">{THEME_SCRIPT}</script>'
+            f'<main id="main" class="od-main">{page}</main></div>')
+
+
+def _static_first(route, data, nonce="", request_type=None):
+    """The page's first frame as plain HTML with the app's own classes and stylesheets, so it paints at its real
+    size and place before the JS has loaded; main.tsx keeps it until the app has drawn the same frame."""
     if route == "home":
-        return ('<div class="static-first"><h1>Your next <br>stretch <br>of <em>road.</em></h1>'
-                '<p>Cars and bikes from local owners across Tamil Nadu. Pick your dates, see what is free, take the keys.</p></div>')
+        return _shell(nonce, '<section class="od-hero"><div class="od-hero-stage"><div class="od-hero-scene"></div>'
+                             '<div class="od-hero-copy"><h1>Your next <br>stretch <br>of <em>road.</em></h1>'
+                             '<p>Cars and bikes from local owners across Tamil Nadu. Pick your dates, see what is free, take the keys.</p>'
+                             '</div></div></section>')
     if route == "catalog" and data:
-        first = (data.get("results") or [None])[0]
-        photo = first and first.get("cover")
-        return ('<div class="static-first"><h1>Where to next?</h1>'
-                + (_img(photo, CARD_SIZES, first["name"], "1.52", wide=True) if photo else "") + "</div>")
+        results = data.get("results") or []
+        count = data.get("count", len(results))
+        kind = (request_type or "").capitalize()
+        heading = "Discover your next car." if kind == "Car" else "Life on two wheels." if kind == "Bike" else "Where to next?"
+        head = ('<header class="od-catalog-head"><span class="od-eyebrow">A ride for every reason</span>'
+                f'<h1>{heading}</h1>'
+                f'<div class="od-catalog-count">{_odometer(f"{count:02d}", f"{count} rides")}<span>{"ride" if count == 1 else "rides"} match</span></div>'
+                '<ul class="od-signs" aria-label="Active filters"></ul></header>')
+        rail = ('<aside class="od-rail"><details class="od-sheet"><summary>Refine your search</summary></details>'
+                '<div class="od-rail-desk"><span class="od-eyebrow">Gearbox</span><div class="od-skel od-rail-skel"></div></div></aside>')
+        tags = "".join(_key_tag(v, i) for i, v in enumerate(results))
+        return _shell(nonce, f'<div class="od-catalog">{head}<div class="od-catalog-body">{rail}<section class="od-results">'
+                             f'<div class="od-tags od-tags-grid">{tags}</div></section></div></div>')
     if route == "detail" and data:
         photos = sorted(data.get("photos") or [], key=lambda p: (not p.get("is_cover"), p.get("order", 0)))
         cover = data.get("cover") or {}
         ratio = f'{int(cover["width"])} / {int(cover["height"])}' if cover.get("width") and cover.get("height") else "3 / 2"
-        return (f'<div class="static-first"><h1>{escape(data.get("name", ""))}</h1>'
-                + (_img(photos[0], GALLERY_SIZES, data.get("name", ""), ratio, wide=True) if photos else "") + "</div>")
+        first = photos[0] if photos else None
+        image = (f'<img src="{escape(first["small"])}" alt="{escape(data.get("name", ""))}" fetchpriority="high" loading="eager" decoding="async"'
+                 + (f' style="background-color: {escape(cover["color"])}"' if cover.get("color") else "") + '>') if first else ""
+        gallery = (f'<div class="od-gallery"><div class="od-gallery-viewport" style="aspect-ratio: {ratio}">'
+                   f'<div class="od-gallery-track">{image}</div></div></div>')
+        head = (f'<header class="od-detail-head"><span class="od-plate mono">ML·{data["id"]:04d}</span><h1>{escape(data.get("name", ""))}</h1>'
+                f'<p class="od-detail-where"><span aria-hidden="true">◉</span> {escape(data.get("location") or "Location on request")} · hosted by '
+                f'{escape(data.get("host_name") or "a local owner")}</p></header>')
+        return _shell(nonce, f'<div class="od-detail"><nav class="od-crumbs" aria-label="Breadcrumb"><a href="/app/vehicles">← Explore vehicles</a>'
+                             f'<span aria-current="page">{escape(data.get("name", ""))}</span></nav>'
+                             f'<section class="od-detail-main">{gallery}{head}</section></div>')
     return ""
 
 
