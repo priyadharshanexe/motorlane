@@ -65,16 +65,22 @@ function Hero() {
     return () => window.clearTimeout(id);
   }, [use3D]);
   const [onScreen, setOnScreen] = useState(true);
-  // Loading ring: stays up (continuing the one in the static first frame) until the page has finished loading and,
-  // where the 3D road runs, its canvas is on screen, so a slow load never looks stuck. Capped at 10 s.
+  // Loading ring: stays up (continuing the one in the static first frame) until the page has loaded and, where the 3D
+  // road runs, its canvas is drawing smoothly: the scene's start-up (chunk, shaders, first frames) briefly freezes the
+  // page, and the ring (a compositor-only spin) keeps turning through it. Needs 20 frames in a row under 50 ms. Capped at 12 s.
   const [booting, setBooting] = useState(true);
   useEffect(() => {
     const t0 = performance.now();
-    const id = window.setInterval(() => {
-      const done = document.readyState === "complete" && (!use3D || !!section.current?.querySelector(".od-hero-scene canvas"));
-      if (done || performance.now() - t0 > 10000) { setBooting(false); window.clearInterval(id); }
-    }, 150);
-    return () => window.clearInterval(id);
+    let last = t0, smooth = 0, raf = 0;
+    const tick = (now: number) => {
+      const ready = document.readyState === "complete" && (!use3D || !!section.current?.querySelector(".od-hero-scene canvas"));
+      smooth = ready && now - last < 50 ? smooth + 1 : 0;
+      last = now;
+      if (smooth >= 20 || now - t0 > 12000) { setBooting(false); return; }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [use3D]);
   // Frame-budget watchdog: if the 3D road keeps frames over ~26 ms once the page has settled (a slow GPU or CPU),
   // drop to the still of the road for the rest of the visit rather than scroll at half speed. Load-time jank does not
