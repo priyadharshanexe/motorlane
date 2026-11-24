@@ -41,6 +41,7 @@ class FirstPaintTests(TestCase):
         self.assertIn('<div class="od-hero-copy"><h1>Your next', html)
         self.assertIn('<div class="od-hero-poster"></div>', html)  # a still of the real scene, never a flat stand-in
         self.assertNotIn('od-flat', html)
+        self.assertIn('<div class="od-spinner" role="status">', html)  # a loading ring until the app takes over
         self.assertNotIn("initial-data", html)
 
     def test_catalog_inlines_its_api_data_with_the_same_query(self):

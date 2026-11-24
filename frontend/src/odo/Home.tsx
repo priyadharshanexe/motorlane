@@ -65,6 +65,17 @@ function Hero() {
     return () => window.clearTimeout(id);
   }, [use3D]);
   const [onScreen, setOnScreen] = useState(true);
+  // Loading ring: stays up (continuing the one in the static first frame) until the page has finished loading and,
+  // where the 3D road runs, its canvas is on screen, so a slow load never looks stuck. Capped at 10 s.
+  const [booting, setBooting] = useState(true);
+  useEffect(() => {
+    const t0 = performance.now();
+    const id = window.setInterval(() => {
+      const done = document.readyState === "complete" && (!use3D || !!section.current?.querySelector(".od-hero-scene canvas"));
+      if (done || performance.now() - t0 > 10000) { setBooting(false); window.clearInterval(id); }
+    }, 150);
+    return () => window.clearInterval(id);
+  }, [use3D]);
   // Frame-budget watchdog: if the 3D road keeps frames over ~26 ms once the page has settled (a slow GPU or CPU),
   // drop to the still of the road for the rest of the visit rather than scroll at half speed. Load-time jank does not
   // count: watching starts 4 s after the scene appears and needs three slow windows in a row.
@@ -145,6 +156,9 @@ function Hero() {
 
   return (
     <section className="od-hero" ref={section} data-chapter="Highway 1 · Start">
+      <div className={booting ? "od-spinner" : "od-spinner out"} role="status" aria-live="polite">
+        <span className="od-spinner-ring" aria-hidden="true" /><span className="od-spinner-label">{booting ? "Loading" : ""}</span>
+      </div>
       <div className="od-hero-stage">
         <div className="od-hero-scene">
           {/* A still of this very scene (captured from the 3D road, day or night) sits underneath: it is what shows
