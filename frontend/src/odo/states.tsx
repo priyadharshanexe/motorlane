@@ -55,3 +55,15 @@ export function RequireSession({ children }: { children: ReactNode }) {
 export function NoEntry() {
   return <RoadSign kind="noentry" title="No entry." action={<Link className="od-cta" to="/sign-in">Sign in</Link>}>Sign in to see this page.</RoadSign>;
 }
+
+/** Any /app URL that matches no page: a "Road ends" sign with the way back. */
+export function NotFound() {
+  return (
+    <div className="od-page" data-chapter="Dead end">
+      <RoadSign kind="end" title="This road doesn't go anywhere."
+        action={<Link className="od-cta" to="/" viewTransition>Back to the start</Link>}>
+        The page you asked for isn't here. It may have moved, or the link may be mistyped.
+      </RoadSign>
+    </div>
+  );
+}

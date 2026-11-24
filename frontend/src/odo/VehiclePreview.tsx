@@ -1,11 +1,11 @@
 import { useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { api } from "./api";
-import type { Vehicle, VehicleDetail } from "./api";
+import { api } from "../api";
+import type { Vehicle, VehicleDetail } from "../api";
 import { Photo, Notice } from "./shared";
-import { Rating } from "./Favorites";
-import { Price } from "./Pricing";
+import { Rating } from "./favorites";
+import { Price } from "./pricing";
 
 export function VehiclePreview({
   vehicle,
@@ -54,7 +54,7 @@ export function VehiclePreview({
       </button>
       <Photo vehicle={vehicle} />
       <div className="preview-copy">
-        <span className="eyebrow">TAKE A CLOSER LOOK</span>
+        <span className="od-eyebrow">Take a closer look</span>
         <h2 id={`preview-${vehicle.id}`}>{vehicle.name}</h2>
         <p>
           {vehicle.location} · {vehicle.vehicle_type} · {vehicle.fuel_type}
@@ -67,7 +67,7 @@ export function VehiclePreview({
         <Notice error={details.error} />
         <div className="preview-footer">
           <Price value={vehicle.price_per_day} label="/day" />
-          <Link className="button" to={url}>
+          <Link className="od-cta" to={url} viewTransition>
             View details & dates →
           </Link>
         </div>

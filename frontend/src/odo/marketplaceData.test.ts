@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Vehicle } from './api'
+import type { Vehicle } from '../api'
 import { featuredListings, overlapsUnavailableDates } from './marketplaceData'
 
 const vehicle: Vehicle = {

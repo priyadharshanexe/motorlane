@@ -5,9 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { Link } from "react-router-dom";
 import type { Vehicle } from "../api";
-import { FavoriteButton, Rating } from "../Favorites";
-import { Photo } from "../shared";
-import { VehiclePreview } from "../VehiclePreview";
+import { FavoriteButton, Rating } from "./favorites";
+import { Photo } from "./shared";
+import { VehiclePreview } from "./VehiclePreview";
 import { reducedMotion, scrolling } from "./primitives";
 
 export const photoTransition = (id: number) => `vehicle-photo-${id}`;

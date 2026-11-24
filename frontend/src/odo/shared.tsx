@@ -1,11 +1,11 @@
-import type { Vehicle } from './api'
+import type { Vehicle } from '../api'
 
 const message = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong.'
 
 export function Notice({ error }: { error: unknown }) {
-  return error ? <p className="error" role="alert">{message(error)}</p> : null
+  return error ? <p className="od-error" role="alert">{message(error)}</p> : null
 }
-export function Busy() { return <p className="loading" role="status">Loading…</p> }
+export function Busy() { return <p className="od-loading" role="status">Loading…</p> }
 // Card images are rendered about 400 CSS px wide; the 1200 px rendition is for detail pages and
 // high-density screens. Width/height reserve the space (no layout shift) and the average colour
 // fills it until the image arrives.
@@ -32,9 +32,4 @@ export function Photo({ vehicle, size = 'card', priority = false }: {
     decoding="async"
     {...(priority ? { fetchPriority: 'high' as const } : {})}
   />
-}
-
-
-export function Status({ value }: { value: string }) {
-  return <span className="status" data-status={value}>{value}</span>
 }

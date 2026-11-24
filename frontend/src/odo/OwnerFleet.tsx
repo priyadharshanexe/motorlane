@@ -11,7 +11,7 @@ import { api, dateLabel, money } from "../api";
 import type { Booking, FleetVehicle, Maintenance, VehiclePhoto } from "../api";
 import { useSession, useWrite } from "../requests";
 import { rentalToday } from "../rentalDates";
-import { Photo } from "../shared";
+import { Photo } from "./shared";
 import { Odometer, reducedMotion } from "./primitives";
 import { ErrorSign, RoadSign } from "./states";
 import { OwnerPage } from "./Owner";

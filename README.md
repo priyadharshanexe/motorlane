@@ -48,13 +48,14 @@ in `frontend/src/odo/`:
 | --- | --- | --- |
 | Shell | `OdoLayout.tsx`, `world.tsx`, `drive.ts`, `primitives.tsx`, `theme.tsx` | One scroll system (Lenis driving GSAP ScrollTrigger from one ticker), a road backdrop, a trip HUD, the toll-plaza footer, day and night themes |
 | Public | `Home.tsx`, `Road3D.tsx`, `Catalog.tsx`, `VehicleDetail.tsx`, `KeyTag.tsx` | A 3D road hero (three.js, loaded when idle, falling back to a 2D road on slow devices), key-tag cards, filters in the URL, a swipe and zoom gallery |
-| Renter | `Checkout.tsx`, `TimeRoad.tsx`, `PaymentSheet.tsx`, `Trips.tsx` | A draggable time road for pickup and return, a payment sheet (demo or Razorpay test), a scroll-drawn booking timeline with paid and refund stops |
+| Renter | `Checkout.tsx`, `TimeRoad.tsx`, `PaymentSheet.tsx`, `Trips.tsx`, `Saved.tsx`, `Account.tsx` | A draggable time road for pickup and return, a payment sheet (demo or Razorpay test), a scroll-drawn booking timeline with paid and refund stops, saved vehicles, and the account page (emails, password, Google, sign out) |
 | Owner | `Owner.tsx`, `OwnerFleet.tsx` | Gauges, a split-flap departures board with live pickup windows, the fleet as key tags, a two-step listing sheet with a photo manager, a paint-to-block maintenance calendar, a value report |
 | Auth and states | `AuthPages.tsx`, `states.tsx` | Sign in and sign up with inline validation, email verification with resend, road-sign empty and error states |
 
 For a fast first paint, Django's `/app/` view adds per-route extras to the HTML: the page's headline (and first
 photo) as static markup shown until the app is ready, a preload for that photo, the page's API data inline, and the
-route's own JS chunks from a build manifest. Reduced motion shows every final state without animation. Element-by-
+route's own JS chunks from a build manifest. Reduced motion shows every final state without animation. Server pages (allauth fallbacks, the staff dashboard, error pages), the emails and the
+booking PDF use the same design; every URL is listed in [the route audit](docs/design/route-audit.md). Element-by-
 element checklists with what was verified: [slice 1](docs/design/slice1-gap-audit.md),
 [slice 2](docs/design/slice2-checklist.md), [slice 3](docs/design/slice3-checklist.md).
 

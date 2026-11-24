@@ -1,0 +1,27 @@
+/* Saved vehicles and the account page. */
+.od-saved-head { max-width: none; }
+.od-saved-count { display: inline-flex; align-items: center; gap: 10px; color: var(--dust); font-weight: 600; }
+.od-saved-grid { margin-top: 8px; }
+
+.od-account-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.od-account-grid .od-card { border-radius: 12px; }
+.od-account-emails { grid-row: span 2; }
+.od-email-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.od-email-list li { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; padding: 12px 14px;
+  border: 1px solid var(--kerb); border-radius: 10px; background: var(--tarmac); }
+.od-email-id { display: grid; gap: 6px; min-width: 0; } .od-email-id b { overflow-wrap: anywhere; }
+.od-email-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.od-badge { font: 700 11px var(--text); letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.od-badge.lane { color: var(--lane-text); } .od-badge.go { color: var(--progress); } .od-badge.wait { color: var(--pending); }
+.od-email-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.od-inline-form { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-top: 14px; }
+.od-inline-form .od-field { flex: 1 1 220px; }
+.od-inline-form .od-cta { min-height: 46px; }
+.od-account-note { color: var(--progress); min-height: 1.2em; margin: 8px 0 0; }
+.od-account .od-input-row { position: relative; display: block; }
+.od-account .od-input-row input { width: 100%; padding-right: 72px; }
+.od-fuel-line { font-size: 13px; color: var(--dust); }
+.od-fuel-line.s3, .od-fuel-line.s4 { color: var(--progress); } .od-fuel-line.s1 { color: var(--stop); }
+.od-provider-line { display: flex; align-items: center; gap: 12px; }
+.od-account-out .od-cta { justify-self: start; }
+@media (max-width: 900px) { .od-account-grid { grid-template-columns: 1fr; } .od-account-emails { grid-row: auto; } }

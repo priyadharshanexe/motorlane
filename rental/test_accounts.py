@@ -13,7 +13,7 @@ class AccountFlowTests(TestCase):
         self.assertFalse(user.has_usable_password())
         response = self.client.get(reverse("account_reset_password"), secure=True)
         self.assertContains(response, "Password Reset")
-        self.assertContains(response, "marketplace.css")
+        self.assertContains(response, "odometer.css")
         response = self.client.post(
             reverse("account_reset_password"), {"email": user.email}, secure=True,
         )

@@ -32,6 +32,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
     path('auth/', include('allauth.headless.urls')),
+    # the old renter dashboard: its trips and saved vehicles have their own pages now
+    re_path(r'^app/dashboard/?$', RedirectView.as_view(url='/app/bookings', permanent=False)),
     re_path(r'^app(?:/.*)?$', react_app, name='react_app'),
     path('api/v1/', include('rental.api_urls')),
     re_path(r'^api/schema/?$', SpectacularAPIView.as_view(), name='api_schema'),
@@ -42,3 +44,12 @@ urlpatterns = [
 # Without a front proxy (local Docker, development) Django serves uploads itself, with cache
 # headers; the view answers 404 unless SERVE_MEDIA is on.
 urlpatterns += [re_path(r"^media/(?P<path>.*)$", serve_media, name="media")]
+if settings.DEBUG:
+    # Development only: see the error pages (which Django shows only when DEBUG is off) in the browser.
+    from django.shortcuts import render as _render
+
+    def _error_preview(request, code):
+        names = {"404": "404.html", "403": "403.html", "500": "500.html", "csrf": "403_csrf.html"}
+        return _render(request, names.get(code, "404.html"), status=200)
+
+    urlpatterns += [path("_preview/error/<str:code>/", _error_preview)]

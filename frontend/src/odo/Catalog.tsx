@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type { Vehicle } from "../api";
-import { Notice } from "../shared";
+import { Notice } from "./shared";
 import { activeFilters, vehicleType, withParam } from "./filters";
 import { KeyTag, KeyTagSkeleton } from "./KeyTag";
 import { Odometer, plural, reducedMotion } from "./primitives";

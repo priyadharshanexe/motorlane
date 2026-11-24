@@ -1,4 +1,4 @@
-import { money } from './api'
+import { money } from '../api'
 
 export function Price({ value, label }: { value: string | number; label?: string }) {
   return <span className={label === "/day" ? "price-display daily-price" : "price-display"}><strong>{money(value)}</strong>{label && <small>{label}</small>}</span>

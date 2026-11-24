@@ -1,0 +1,3 @@
+{% extends "rental/base.html" %}
+{% block title %}Server error · Motorlane{% endblock %}
+{% block content %}{% include "rental_error_sign.html" with code="Server error" sign="diversion" title="Diversion ahead." text="Something went wrong on our side. It has been logged; please try again in a moment." %}{% endblock %}

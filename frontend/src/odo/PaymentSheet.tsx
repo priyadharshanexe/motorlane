@@ -8,7 +8,7 @@ import { api, money } from "../api";
 import type { Booking } from "../api";
 import { razorpayCheckout } from "../payments";
 import type { CheckoutOptions, CheckoutResult, PaymentConfig } from "../payments";
-import type { Quote } from "../Pricing";
+import type { Quote } from "./pricing";
 import { useWrite } from "../requests";
 import { Odometer, reducedMotion } from "./primitives";
 

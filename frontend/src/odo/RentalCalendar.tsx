@@ -1,6 +1,6 @@
-import { rentalToday } from "./rentalDates";
+import { rentalToday } from "../rentalDates";
 import { useState } from 'react'
-import type { DateRange } from './api'
+import type { DateRange } from '../api'
 import { overlapsUnavailableDates } from './marketplaceData'
 
 export function RentalCalendar({ start, end, unavailable, onSelect }: {

@@ -8,7 +8,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type { Vehicle } from "../api";
-import { Notice } from "../shared";
+import { Notice } from "./shared";
 import { drive, gsap, IDLE_KMH, MAX_KMH, onDrive, onScreen as watchScreen, ScrollTrigger } from "./drive";
 import { KeyTag, KeyTagSkeleton } from "./KeyTag";
 import { canRun3D, Odometer, plural, reducedMotion, TripMeter, useOnce } from "./primitives";

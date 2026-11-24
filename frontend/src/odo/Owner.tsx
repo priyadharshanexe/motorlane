@@ -10,7 +10,7 @@ import { api, dateLabel, money } from "../api";
 import type { Booking, BookingValue, FleetVehicle } from "../api";
 import { formData, useWrite } from "../requests";
 import { rentalToday } from "../rentalDates";
-import { Photo } from "../shared";
+import { Photo } from "./shared";
 import { Odometer, plural, reducedMotion } from "./primitives";
 import { ErrorSign, RoadSign } from "./states";
 import { State, TimelineRoad } from "./Trips";

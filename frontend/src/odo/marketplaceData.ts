@@ -1,4 +1,4 @@
-import type { DateRange, Vehicle } from './api'
+import type { DateRange, Vehicle } from '../api'
 
 export function featuredListings(vehicles: Vehicle[]) {
   const first = vehicles[0]

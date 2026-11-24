@@ -49,7 +49,7 @@ export interface Booking extends DateRange {
   status_changed_at: string | null
   pickup_time: string
   return_time: string
-  price_breakdown?: Partial<import('./Pricing').Quote>
+  price_breakdown?: Partial<import('./odo/pricing').Quote>
   payment_required?: boolean
   payment?: {
     status: string; amount: string; refunded: string; cancellation_fee: string; provider: string

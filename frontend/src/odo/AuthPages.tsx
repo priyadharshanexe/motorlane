@@ -9,7 +9,7 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-r
 import { api, authRequest, signIn } from "../api";
 import type { Vehicle } from "../api";
 import { announceAuth, useSession } from "../requests";
-import { Photo } from "../shared";
+import { Photo } from "./shared";
 import { strength, validate } from "./authRules";
 import { reducedMotion } from "./primitives";
 

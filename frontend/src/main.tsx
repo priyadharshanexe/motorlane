@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import './index.css'
+import './odo/base.css'
 import App from './App'
 import { onAuthElsewhere } from './requests'
 import archivo from '@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2?url'

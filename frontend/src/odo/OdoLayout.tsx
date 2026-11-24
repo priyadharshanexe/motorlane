@@ -9,7 +9,7 @@ import "@fontsource-variable/public-sans";
 import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/700.css";
 import { signOut, useSession } from "../requests";
-import RouteErrorBoundary from "../RouteErrorBoundary";
+import RouteErrorBoundary from "./RouteErrorBoundary";
 import { drive, getLenis, MAX_KMH, onDrive, onScreen, ScrollTrigger, startDrive, stopDrive } from "./drive";
 import { reducedMotion } from "./primitives";
 import { ThemeProvider, useTheme } from "./theme";
@@ -18,6 +18,7 @@ import "./odo.css";
 import "./slice2.css";
 import "./slice3.css";
 import "./auth.css";
+import "./garage.css";
 
 /** Sign-in, sign-up, verify and reset fill one screen with their own scene, so they have no footer. */
 const AUTH_ROUTES = /^\/(sign-in|register|verify-email|reset-password)(\/|$)/;
@@ -98,9 +99,9 @@ function Shell({ children }: { children: ReactNode }) {
             <div className="od-menu-sheet">
               <Link to="/vehicles">Explore vehicles</Link>
               <Link to="/favorites">Saved vehicles</Link>
-              <Link to="/dashboard">Renter dashboard</Link>
+              <Link to="/bookings">Your trips</Link>
               <Link to="/owner">Owner workspace</Link>
-              <Link to="/account">Settings</Link>
+              <Link to="/account">Account</Link>
               {session.data?.user ? (
                 <button type="button" className="od-menu-signout" onClick={() => void signOut(session.data!.csrf_token)}>Sign out</button>
               ) : <Link to="/sign-in">Sign in / Create account</Link>}
