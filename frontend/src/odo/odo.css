@@ -96,7 +96,7 @@
 .od-menu-sheet a, .od-menu-signout { display: block; padding: 10px 12px; color: var(--chalk) !important; text-align: left; font-weight: 500; }
 .od-menu-sheet a:hover { background: var(--tarmac); }
 .od-menu-signout { width: 100%; border: 0; background: transparent; color: var(--chalk); }
-.od-app .od-main { flex: 1; padding: 0; margin: 0; max-width: none; position: relative; z-index: 1; }  /* the app's global main padding would leave a band */
+.od-app .od-main { flex: 1; padding: 0; margin: 0; max-width: none; position: relative; z-index: 2; }  /* the app's global main padding would leave a band; above the footer (z 1) so sheets opened from a page are never under it */
 
 /* odometer + trip meter */
 .odo { display: inline-flex; gap: 4px; align-items: center; vertical-align: middle; }

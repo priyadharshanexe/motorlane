@@ -4,6 +4,7 @@
 // the tag swings away, with the message and a retry. The payment calls are the same as before.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, money } from "../api";
 import type { Booking } from "../api";
 import { razorpayCheckout } from "../payments";
@@ -49,7 +50,10 @@ export function PaymentSheet({ booking, onClose }: { booking: Booking; onClose: 
     }
   };
 
-  return (
+  // Rendered at the app's top level (inside .od-app, so the theme tokens still apply), not inside the page: the page
+  // is its own layer under the header, so a sheet inside it could never cover the header or anything above the page.
+  const host = document.querySelector<HTMLElement>(".od-app:not(.static-first)") ?? document.body;
+  return createPortal(
     <div className="od-paysheet-scrim" onClick={event => { if (event.target === event.currentTarget && phase !== "processing") onClose(); }}>
       <section className={`od-paysheet phase-${phase}`} role="dialog" aria-modal="true" aria-labelledby="od-pay-title">
         <div className="od-paysheet-grip" aria-hidden="true" />
@@ -92,5 +96,5 @@ export function PaymentSheet({ booking, onClose }: { booking: Booking; onClose: 
         )}
       </section>
     </div>
-  );
+  , host);
 }
