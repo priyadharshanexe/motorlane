@@ -39,6 +39,8 @@ class FirstPaintTests(TestCase):
         self.assertIn('<link rel="modulepreload" crossorigin href="/static/react/assets/Home.js">', html)
         self.assertIn('<div id="root"><div class="od-app static-first"', html)
         self.assertIn('<div class="od-hero-copy"><h1>Your next', html)
+        self.assertIn('<div class="od-hero-poster"></div>', html)  # a still of the real scene, never a flat stand-in
+        self.assertNotIn('od-flat', html)
         self.assertNotIn("initial-data", html)
 
     def test_catalog_inlines_its_api_data_with_the_same_query(self):

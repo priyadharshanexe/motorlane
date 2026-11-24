@@ -193,7 +193,7 @@ def _static_first(route, data, nonce="", request_type=None):
     """The page's first frame as plain HTML with the app's own classes and stylesheets, so it paints at its real
     size and place before the JS has loaded; main.tsx keeps it until the app has drawn the same frame."""
     if route == "home":
-        return _shell(nonce, '<section class="od-hero"><div class="od-hero-stage"><div class="od-hero-scene"></div>'
+        return _shell(nonce, '<section class="od-hero"><div class="od-hero-stage"><div class="od-hero-scene"><div class="od-hero-poster"></div></div>'
                              '<div class="od-hero-copy"><h1>Your next <br>stretch <br>of <em>road.</em></h1>'
                              '<p>Cars and bikes from local owners across Tamil Nadu. Pick your dates, see what is free, take the keys.</p>'
                              '</div></div></section>')

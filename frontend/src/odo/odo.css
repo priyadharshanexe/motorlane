@@ -124,6 +124,12 @@
 .od-hero { position: relative; height: 190vh; min-height: 1200px; }
 .od-hero-stage { position: sticky; top: 0; height: 100vh; min-height: 620px; overflow: hidden; }
 .od-hero-scene { position: absolute; inset: 0; z-index: 0; }
+.od-hero-poster { position: absolute; inset: 0; background: #121417 url("/posters/hero-dark-desktop.webp") center / cover no-repeat; }
+.od-app[data-theme="light"] .od-hero-poster { background-color: #9FC3BC; background-image: url("/posters/hero-light-desktop.webp"); }
+@media (max-aspect-ratio: 4/5) {
+  .od-hero-poster { background-image: url("/posters/hero-dark-phone.webp"); }
+  .od-app[data-theme="light"] .od-hero-poster { background-image: url("/posters/hero-light-phone.webp"); }
+}
 .lab-road3d, .lab-road3d > div, .lab-road3d canvas { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; }
 .od-hero-scene::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(90deg, var(--tarmac) 0%, color-mix(in srgb, var(--tarmac) 65%, transparent) 30%, transparent 58%); }
@@ -172,12 +178,6 @@
 .od-trip .tripmeter-wheel { width: 17px; font-size: 16px; }
 .od-field { display: grid; gap: 6px; }
 .od-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.od-flatroad { position: absolute; inset: 0; overflow: hidden; }
-.od-flat-scenery { position: absolute; inset: 0; width: 100%; height: 100%; }
-.od-flat-scenery .far { fill: #22231F; } .od-flat-scenery .field { fill: #141E17; }
-.od-flat-palm .trunk { fill: none; stroke: #2E2820; stroke-width: 7; stroke-linecap: round; } .od-flat-palm .leaf { fill: #183022; }
-.od-app[data-theme="light"] .od-flat-scenery .far { fill: #A3C2BC; } .od-app[data-theme="light"] .od-flat-scenery .field { fill: #8BBE4B; }
-.od-app[data-theme="light"] .od-flat-palm .trunk { stroke: #8A6440; } .od-app[data-theme="light"] .od-flat-palm .leaf { fill: #3E9140; }
 .od-road-surface { position: absolute; inset: 37% 0 0 0; background: var(--asphalt); clip-path: polygon(48.5% 0, 51.5% 0, 100% 100%, 0 100%); }
 .od-road-dashes { position: absolute; left: calc(50% - 5px); top: 0; height: calc(100% + 82px); width: 10px;
   background: repeating-linear-gradient(to bottom, var(--lane) 0 36px, transparent 36px 82px); transform: translate3d(0, -82px, 0); transform-origin: 50% 100%; will-change: transform; }

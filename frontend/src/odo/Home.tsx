@@ -51,7 +51,7 @@ function Hero() {
   const places = useMemo(() => placeKey.split("|"), [placeKey]);
 
   const section = useRef<HTMLElement>(null), headline = useRef<HTMLHeadingElement>(null);
-  const streaks = useRef<HTMLDivElement>(null), sheet = useRef<HTMLSpanElement>(null), flatDashes = useRef<HTMLSpanElement>(null);
+  const streaks = useRef<HTMLDivElement>(null), sheet = useRef<HTMLSpanElement>(null);
   const needle = useRef<SVGLineElement>(null), kmh = useRef<HTMLSpanElement>(null);
   const [use3D, setUse3D] = useState(canRun3D);
   // The 3D road (and its ~230 KB chunk) loads only once the browser is idle after the first paint, so it never
@@ -65,19 +65,25 @@ function Hero() {
     return () => window.clearTimeout(id);
   }, [use3D]);
   const [onScreen, setOnScreen] = useState(true);
-  // Frame-budget watchdog: if the 3D road keeps frames over ~26 ms (a slow GPU or CPU), drop to the 2D road for
-  // the rest of the visit rather than scroll at half speed.
+  // Frame-budget watchdog: if the 3D road keeps frames over ~26 ms once the page has settled (a slow GPU or CPU),
+  // drop to the still of the road for the rest of the visit rather than scroll at half speed. Load-time jank does not
+  // count: watching starts 4 s after the scene appears and needs three slow windows in a row.
   useEffect(() => {
     if (!use3D || !load3D) return;
-    let n = 0, sum = 0, windows = 0;
-    return onDrive(dt => {
-      if (!onScreen) return;
+    let forced = false;
+    try { forced = localStorage.getItem("motorlane-3d") === "always"; } catch { /* storage blocked */ }
+    if (forced) return;
+    let n = 0, sum = 0, slow = 0, armed = false;
+    const arm = window.setTimeout(() => { armed = true; }, 4000);
+    const stop = onDrive(dt => {
+      if (!armed || !onScreen) return;
       sum += dt; n += 1;
       if (n < 30) return;
-      windows += 1;  // the first window covers the 3D scene's own start-up, so it does not count
-      if (windows > 1 && sum / n > 0.026) setUse3D(false);
+      slow = sum / n > 0.026 ? slow + 1 : 0;
       n = 0; sum = 0;
+      if (slow >= 3) setUse3D(false);
     });
+    return () => { window.clearTimeout(arm); stop(); };
   }, [use3D, load3D, onScreen]);
 
   useLayoutEffect(() => {
@@ -99,7 +105,7 @@ function Hero() {
 
   // Per frame from the shared drive state: headline stretch, speed streaks, speedometer, and the 2D road.
   useEffect(() => {
-    let distance = 0, streakY = 0, streaksOn = true, shownKmh = -1, shownHead = "", shownNeedle = "";
+    let streakY = 0, streaksOn = true, shownKmh = -1, shownHead = "", shownNeedle = "";
     // Everything here lives in the hero: skip it all once the hero is scrolled away.
     const visible = watchScreen(headline.current?.closest("section") ?? headline.current);
     const stop = onDrive(dt => {
@@ -121,10 +127,6 @@ function Hero() {
       if (needle.current && rot !== shownNeedle) { shownNeedle = rot; needle.current.style.transform = rot; }
       const rounded = Math.round(shownSpeed);
       if (kmh.current && rounded !== shownKmh) { shownKmh = rounded; kmh.current.textContent = String(rounded).padStart(3, "0"); }
-      if (flatDashes.current) {
-        distance = (distance + (40 + t * 1400) * dt) % 82;
-        flatDashes.current.style.transform = `translate3d(0, ${(distance - 82).toFixed(1)}px, 0) scaleY(${(1 + t * 1.5).toFixed(2)})`;
-      }
     });
     return () => { stop(); visible.stop(); };
   }, []);
@@ -145,11 +147,15 @@ function Hero() {
     <section className="od-hero" ref={section} data-chapter="Highway 1 · Start">
       <div className="od-hero-stage">
         <div className="od-hero-scene">
-          {use3D && load3D ? (
-            <Suspense fallback={<FlatRoad dashes={flatDashes} />}>
+          {/* A still of this very scene (captured from the 3D road, day or night) sits underneath: it is what shows
+              before WebGL has drawn, while the 3D chunk loads, and on devices that keep the road still. The canvas is
+              transparent until its first frame and then covers it, so the hand-over moves nothing. */}
+          <div className="od-hero-poster" aria-hidden="true" />
+          {use3D && load3D && (
+            <Suspense fallback={null}>
               <Road3D light={theme === "light"} active={onScreen} places={places} />
             </Suspense>
-          ) : <FlatRoad dashes={flatDashes} />}
+          )}
           <div className="od-streaks" ref={streaks} aria-hidden="true"><span className="od-streaks-sheet" ref={sheet} /></div>
         </div>
         <div className="od-hero-copy">
@@ -196,28 +202,6 @@ function Hero() {
 }
 
 /** The 2D road, with a static roadside so it is never empty. */
-function FlatRoad({ dashes }: { dashes: React.RefObject<HTMLSpanElement | null> }) {
-  const palm = (x: number, y: number, s: number, flip = 1) => (
-    <g transform={`translate(${x} ${y}) scale(${s * flip} ${s})`} className="od-flat-palm">
-      <path d="M0 0 C 4 -40, 10 -80, 6 -120" className="trunk" />
-      <path d="M6 -120 c -20 -10 -40 -4 -54 12 c 18 -14 36 -14 54 -12 z M6 -120 c 20 -12 42 -6 56 10 c -18 -12 -38 -12 -56 -10 z
-        M6 -120 c -10 -18 -30 -26 -44 -24 c 16 2 32 10 44 24 z M6 -120 c 12 -18 32 -24 46 -20 c -16 2 -34 8 -46 20 z" className="leaf" />
-    </g>
-  );
-  return (
-    <div className="od-flatroad">
-      <svg className="od-flat-scenery" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-        <path className="far" d="M0 240 C 120 190, 200 210, 300 196 S 480 170, 560 200 S 760 180, 860 206 S 960 196, 1000 210 V 260 H 0 Z" />
-        <rect className="field" x="0" y="258" width="1000" height="442" />
-        {palm(90, 520, 1.5)}{palm(200, 380, 0.9, -1)}{palm(830, 560, 1.7, -1)}{palm(930, 420, 1.1)}
-      </svg>
-      <div className="od-road-surface"><span className="od-road-dashes" ref={dashes} /></div>
-    </div>
-  );
-}
-
-// ----- The rack of key tags --------------------------------------------------------------------------------------
-
 function Rack() {
   const [category, setCategory] = useState("");
   // The six newest listings of the chosen category, straight from the API's "newest" sort.
