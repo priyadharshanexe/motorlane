@@ -89,35 +89,34 @@ dialog { color: var(--chalk); }
    hidden would not count as the page's first contentful content */
 .static-first *, .static-first *::before, .static-first *::after { animation: none !important; transition: none !important; }
 .static-first .od-skel { opacity: .6; }
-/* Loading ring: shown only in the static first frame, so a slow load never looks stuck; it fades out with the frame. */
-.od-spinner { position: fixed; left: 50%; top: 96px; transform: translateX(-50%); z-index: 1001; display: flex; align-items: center; gap: 10px;
-  padding: 8px 14px 8px 10px; border-radius: 999px; background: rgba(11, 12, 14, .72); color: #fff; font: 600 13px/1 system-ui, sans-serif;
-  letter-spacing: .04em; backdrop-filter: blur(6px); pointer-events: none; transition: opacity .3s ease; isolation: isolate; }
+/* Loader (static first frame and home until the 3D road runs smoothly): a little speedometer revving into the red
+   beside "Starting engine", with lane dashes rushing past underneath. Transform-only, so it keeps moving while the
+   page is busy starting the 3D scene. */
+.od-spinner { position: fixed; left: 50%; top: 96px; transform: translateX(-50%); z-index: 1001; display: flex; align-items: center; gap: 12px;
+  padding: 7px 18px 7px 8px; border-radius: 999px; background: rgba(11, 12, 14, .78); color: #fff; font: 700 12px/1 system-ui, sans-serif;
+  letter-spacing: .12em; text-transform: uppercase; backdrop-filter: blur(8px); box-shadow: 0 6px 24px rgba(0, 0, 0, .25), inset 0 0 0 1px rgba(255, 255, 255, .08);
+  pointer-events: none; transition: opacity .35s ease; }
 .od-spinner.out { opacity: 0; }
-@media (max-width: 767px) { .od-spinner { top: 20px; left: calc(50% + 44px); transform: none; padding: 7px; }
-  .od-spinner-label { display: none; } }
-.od-spinner-ring { position: relative; width: 22px; height: 22px; flex: none; border-radius: 50%;
-  background: conic-gradient(from 0deg, rgba(255, 197, 49, 0) 0deg, rgba(255, 197, 49, .15) 90deg, #FFC531 300deg, #FFE08A 340deg, rgba(255, 197, 49, 0) 341deg);
-  -webkit-mask: radial-gradient(circle, transparent 7.5px, #000 8px); mask: radial-gradient(circle, transparent 7.5px, #000 8px);
-  animation: od-spinner-spin .7s linear infinite; }
-/* spokes: a little wheel hub turning the other way, and a glow that breathes behind the ring */
-.od-spinner::after { content: ""; position: absolute; width: 34px; height: 34px; left: 4px; top: 50%; margin-top: -17px; border-radius: 50%; z-index: -1;
-  background: radial-gradient(circle, rgba(255, 197, 49, .55), rgba(255, 197, 49, 0) 70%); animation: od-spinner-glow 1.2s ease-in-out infinite; }
-.od-spinner::before { content: ""; position: absolute; width: 10px; height: 10px; border-radius: 50%; left: 16px; top: 50%; margin-top: -5px;
-  background: repeating-conic-gradient(#FFC531 0deg 14deg, transparent 14deg 60deg);
-  -webkit-mask: radial-gradient(circle, #000 4.5px, transparent 5px); mask: radial-gradient(circle, #000 4.5px, transparent 5px);
-  animation: od-spinner-spin 1.1s linear infinite reverse; }
-.od-spinner-label { opacity: .9; background: linear-gradient(90deg, #fff 0%, #fff 40%, #FFC531 50%, #fff 60%, #fff 100%) 0 0 / 250% 100%;
-  -webkit-background-clip: text; background-clip: text; color: transparent; animation: od-spinner-shine 1.4s linear infinite; }
-.static-first .od-spinner .od-spinner-ring { animation: od-spinner-spin .7s linear infinite !important; }
-.static-first .od-spinner::after { animation: od-spinner-glow 1.2s ease-in-out infinite !important; }
-.static-first .od-spinner::before { animation: od-spinner-spin 1.1s linear infinite reverse !important; }
-.static-first .od-spinner .od-spinner-label { animation: od-spinner-shine 1.4s linear infinite !important; }
-@keyframes od-spinner-spin { to { transform: rotate(360deg); } }
-@keyframes od-spinner-glow { 0%, 100% { opacity: .25; transform: scale(.85); } 50% { opacity: 1; transform: scale(1.25); } }
-@keyframes od-spinner-shine { from { background-position: 100% 0; } to { background-position: -150% 0; } }
-@media (max-width: 767px) { .od-spinner::before { left: 13px; } .od-spinner::after { left: 1px; } }
-@media (prefers-reduced-motion: reduce) { .od-spinner .od-spinner-ring, .static-first .od-spinner .od-spinner-ring { animation-duration: 2.4s !important; }
-  .od-spinner::before, .od-spinner::after, .od-spinner-label,
-  .static-first .od-spinner::before, .static-first .od-spinner::after, .static-first .od-spinner .od-spinner-label { animation: none !important; } }
+.od-spinner-gauge { position: relative; width: 34px; height: 34px; flex: none; border-radius: 50%; background: #1b1d21; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
+/* dial: a 270-degree track, yellow, with the red zone at the top end */
+.od-spinner-gauge::before { content: ""; position: absolute; inset: 3px; border-radius: 50%;
+  background: conic-gradient(from 225deg, #FFC531 0deg 200deg, #E5484D 200deg 270deg, transparent 270deg);
+  -webkit-mask: radial-gradient(circle, transparent 11px, #000 11.5px); mask: radial-gradient(circle, transparent 11px, #000 11.5px); }
+.od-spinner-gauge::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #fff; }
+.od-spinner-gauge i { position: absolute; left: 50%; bottom: 50%; width: 2px; height: 12px; margin-left: -1px; border-radius: 2px; background: #fff;
+  transform-origin: 50% 100%; transform: rotate(-135deg); animation: od-spinner-rev 1.8s cubic-bezier(.3, .7, .3, 1) infinite; }
+.od-spinner-text { display: flex; flex-direction: column; gap: 6px; }
+.od-spinner-lane { position: relative; display: block; height: 3px; overflow: hidden; border-radius: 2px; background: rgba(255, 255, 255, .1); }
+.od-spinner-lane i { position: absolute; inset: 0 auto 0 0; width: 200%; background: repeating-linear-gradient(90deg, #FFC531 0 10px, transparent 10px 20px);
+  animation: od-spinner-lane .35s linear infinite; }
+.static-first .od-spinner .od-spinner-gauge i { animation: od-spinner-rev 1.8s cubic-bezier(.3, .7, .3, 1) infinite !important; }
+.static-first .od-spinner .od-spinner-lane i { animation: od-spinner-lane .35s linear infinite !important; }
+@keyframes od-spinner-rev { 0% { transform: rotate(-135deg); } 35% { transform: rotate(118deg); } 45% { transform: rotate(100deg); }
+  60% { transform: rotate(-20deg); } 80% { transform: rotate(125deg); } 100% { transform: rotate(-135deg); } }
+@keyframes od-spinner-lane { to { transform: translateX(-20px); } }
+@media (max-width: 767px) { .od-spinner { top: 18px; left: calc(50% + 44px); transform: none; padding: 4px; }
+  .od-spinner-text { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .od-spinner .od-spinner-gauge i, .static-first .od-spinner .od-spinner-gauge i { animation-duration: 4s !important; }
+  .od-spinner .od-spinner-lane i, .static-first .od-spinner .od-spinner-lane i { animation: none !important; } }
 @media (prefers-reduced-motion: reduce) { .static-overlay { transition: none; } }

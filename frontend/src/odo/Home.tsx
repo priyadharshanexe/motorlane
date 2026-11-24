@@ -163,7 +163,9 @@ function Hero() {
   return (
     <section className="od-hero" ref={section} data-chapter="Highway 1 · Start">
       <div className={booting ? "od-spinner" : "od-spinner out"} role="status" aria-live="polite">
-        <span className="od-spinner-ring" aria-hidden="true" /><span className="od-spinner-label">{booting ? "Loading" : ""}</span>
+        <span className="od-spinner-gauge" aria-hidden="true"><i /></span>
+        <span className="od-spinner-text"><span className="od-spinner-label">Starting engine</span>
+          <span className="od-spinner-lane" aria-hidden="true"><i /></span></span>
       </div>
       <div className="od-hero-stage">
         <div className="od-hero-scene">

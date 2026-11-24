@@ -187,8 +187,9 @@ def _shell(nonce, page):
     return (f'<div class="od-app static-first" data-theme="dark" data-motion="full">{header}'
             f'<script nonce="{escape(nonce)}">{THEME_SCRIPT}</script>'
             f'<main id="main" class="od-main">{page}</main>'
-            '<div class="od-spinner" role="status"><span class="od-spinner-ring" aria-hidden="true"></span>'
-            '<span class="od-spinner-label">Loading</span></div></div>')
+            '<div class="od-spinner" role="status"><span class="od-spinner-gauge" aria-hidden="true"><i></i></span>'
+            '<span class="od-spinner-text"><span class="od-spinner-label">Starting engine</span>'
+            '<span class="od-spinner-lane" aria-hidden="true"><i></i></span></span></div></div>')
 
 
 def _static_first(route, data, nonce="", request_type=None):
