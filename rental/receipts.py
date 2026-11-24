@@ -29,6 +29,12 @@ STOP_LABELS = {
 }
 
 
+def host_label(owner):
+    """The owner as renters see them: a name, never an email address (the app hides it the same way)."""
+    name = (getattr(owner, "name", "") or "").strip()
+    return name if name and "@" not in name else "Vehicle owner"
+
+
 def render_booking_summary(stream, booking):
     width = A4[0] - 88
     styles = {
@@ -79,7 +85,7 @@ def render_booking_summary(stream, booking):
                 field("Rental days", days, "mono")]], [width * .4, width * .4, width * .2], PAPER, box=True),
         Spacer(1, 6),
         table([[field("Renter", booking.contact_name or booking.user.name),
-                field("Hosted by", getattr(owner, "name", None) or "Vehicle owner")]], [width / 2, width / 2]),
+                field("Hosted by", host_label(owner))]], [width / 2, width / 2]),
         Spacer(1, 10), text("Price breakdown", "heading"), Spacer(1, 6),
     ]
     lines = (booking.price_breakdown or {}).get("lines") or []

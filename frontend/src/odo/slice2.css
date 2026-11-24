@@ -118,6 +118,8 @@
 @keyframes od-rise { from { transform: translateY(100%); } }
 .od-paysheet-grip { width: 46px; height: 5px; border-radius: 3px; background: var(--kerb); justify-self: center; }
 .od-paysheet h2 { font-weight: 900 !important; font-size: 26px !important; }
+/* once paid, the key tag and its stamp hang over the heading: long names wrap clear of them */
+.od-paysheet.phase-paid h2 { padding-right: 160px; }
 .od-provider { display: inline-block; margin-top: 6px; border: 1px solid var(--kerb); padding: 3px 10px; border-radius: 999px; font-size: 13px; color: var(--dust); }
 .od-pay-amount { display: flex; align-items: center; font: 700 40px var(--mono); color: var(--lane-text); }
 .od-pay-amount .odo-sep { margin-right: 6px; }
@@ -248,6 +250,7 @@
   .od-stub-tag { grid-template-columns: 96px 1fr; } .od-stub-tag .photo { width: 96px; }
   .od-paysheet { border-radius: 16px 16px 0 0; padding: 14px 18px 22px; }
   .od-pay-key { right: 12px; }
+  .od-paysheet.phase-paid h2 { padding-right: 140px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .od-paysheet, .od-paysheet-scrim, .od-receipt-lines > div, .od-swing-tag, .od-tl-note, .od-roadsign svg > * { animation: none !important; }

@@ -1,0 +1,3 @@
+{% extends "account/email/base_message.txt" %}{% block content %}{% autoescape off %}{% block notification_message %}{% endblock notification_message %}
+
+If this was not you, reset your password straight away and reply to this email.{% endautoescape %}{% endblock content %}

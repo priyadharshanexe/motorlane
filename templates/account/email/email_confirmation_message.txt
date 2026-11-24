@@ -1,0 +1,9 @@
+{% extends "account/email/base_message.txt" %}{% block content %}{% autoescape off %}{% if code %}Your Motorlane verification code is:
+
+{{ code }}
+
+Enter it in the window where you signed up.{% else %}Confirm this email address to finish setting up your Motorlane account:
+
+{{ activate_url }}
+
+The link opens the sign-up page and verifies you; it works once.{% endif %}{% endautoescape %}{% endblock content %}

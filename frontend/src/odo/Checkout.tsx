@@ -73,6 +73,14 @@ export function Checkout() {
     }
     return spans;
   }, [start, nowDate, nowTime, earliest?.[0], earliest?.[1]]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // A pickup today can't start in the past: the default 09:00 (or a stale link) moves to the next free half hour, and
+  // a same-day return keeps at least an hour after it.
+  const pastSlots = start === nowDate ? Math.min(SLOTS, toSlot(roundUp(nowTime)) + 1) : 0;
+  useEffect(() => {
+    if (pickup >= pastSlots || pastSlots >= SLOTS) return;
+    setPickup(pastSlots);
+    if (start === end && dropoff <= pastSlots + 1) setDropoff(Math.min(SLOTS - 1, pastSlots + 2));
+  }, [pastSlots, start, end]);  // eslint-disable-line react-hooks/exhaustive-deps
   const earliestSlot = earliest && earliest[0] === start ? toSlot(earliest[1]) : null;
   const useEarliest = () => {
     // Keep the rental length and move pickup (and the dates, if needed) to the suggestion.

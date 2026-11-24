@@ -73,7 +73,7 @@ class BookingPermissionsTests(TestCase):
         self.assertContains(self.client.post(url, {**CHECKOUT, "vehicle_id": vehicle.pk, "start_date": "invalid"}), "Enter a valid date", status_code=400)
         vehicle.is_available = False
         vehicle.save(update_fields=["is_available"])
-        today = timezone.localdate().isoformat()
+        today = (timezone.localdate() + timedelta(days=1)).isoformat()  # a pickup time today may have passed
         response = self.client.post(url, {**CHECKOUT, "vehicle_id": self.booking.vehicle_id, "start_date": today, "end_date": today})
         self.assertContains(response, "This vehicle is no longer available.", status_code=409)
         self.assertEqual(Booking.objects.count(), 1)
@@ -140,7 +140,7 @@ class BookingPermissionsTests(TestCase):
         self.assertEqual(self.booking.display_status, Booking.Status.EXPIRED)
 
         self.sign_in(self.renter)
-        today = timezone.localdate()
+        today = timezone.localdate() + timedelta(days=1)  # a pickup time today may have passed
         response = self.client.post(reverse("api_bookings"), {
             **CHECKOUT, "vehicle_id": self.booking.vehicle_id, "start_date": today, "end_date": today,
         })
@@ -157,7 +157,7 @@ class BookingPermissionsTests(TestCase):
         self.booking.status = Booking.Status.REJECTED
         self.booking.save(update_fields=["status"])
         self.sign_in(self.owner)
-        today = timezone.localdate()
+        today = timezone.localdate() + timedelta(days=1)  # a pickup time today may have passed
         dates = {"start_date": today, "end_date": today}
         vehicle_id = self.booking.vehicle_id
         maintenance = reverse("api_maintenance", args=[vehicle_id])

@@ -60,6 +60,14 @@ class DocumentsTests(TestCase):
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertGreater(len(pdf), 2000)
 
+    def test_the_pdf_never_prints_the_owners_email(self):
+        """An owner without a name is shown by email inside Django; renters must not get that address in their PDF."""
+        from types import SimpleNamespace
+        from .receipts import host_label
+        self.assertEqual(host_label(SimpleNamespace(name="owner@example.com")), "Vehicle owner")
+        self.assertEqual(host_label(SimpleNamespace(name="Asha R")), "Asha R")
+        self.assertEqual(host_label(None), "Vehicle owner")
+
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_emails_carry_the_brand_and_link_to_the_booking(self):
         from datetime import timedelta

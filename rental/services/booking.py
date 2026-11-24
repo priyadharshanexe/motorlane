@@ -10,7 +10,7 @@ from ..forms import rental_window
 from ..models import Booking, Profile, Vehicle
 from ..selectors import active_bookings
 from .availability import Unavailable, check_availability
-from .events import record_event
+from .events import record_event, rupees
 from .notifications import notify
 from .pricing import price_rental
 from .profiles import rental_profile
@@ -101,7 +101,7 @@ def transition_booking(actor, booking_id, destination, allowed, *, owner=False):
     ])
     note = ""
     if extra.get("refund"):
-        note = f"Refund of ₹{extra['refund']} issued" + (f"; ₹{extra['fee']} cancellation fee kept." if extra.get("fee") else ".")
+        note = f"Refund of {rupees(extra['refund'])} issued" + (f"; {rupees(extra['fee'])} cancellation fee kept." if extra.get("fee") else ".")
     record_event(booking, previous, destination, actor=actor, note=note)
     announce_transition(booking, destination, **extra)
     logger.info("booking_status_changed booking_id=%s actor_id=%s status=%s", booking.pk, actor.pk, destination)

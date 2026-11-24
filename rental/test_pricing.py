@@ -43,12 +43,12 @@ class PricingTests(TestCase):
         self.assertEqual((quote.weekday_days, quote.weekend_days), (1, 2))
         self.assertEqual(quote.rental_total, Decimal("4000.00"))
         self.assertEqual([line["kind"] for line in quote.lines], ["weekday", "weekend"])
-        self.assertEqual(quote.lines[1], {"kind": "weekend", "label": "2 weekend days × ₹1500.00", "amount": "3000.00"})
+        self.assertEqual(quote.lines[1], {"kind": "weekend", "label": "2 weekend days × ₹1,500", "amount": "3000.00"})
 
     def test_without_weekend_rate_there_is_a_single_line(self):
         saturday = next_weekday(SATURDAY)
         quote = price_rental(self.vehicle, at(saturday), at(saturday + timedelta(days=2)))
-        self.assertEqual(quote.lines, [{"kind": "rental", "label": "2 days × ₹1000.00", "amount": "2000.00"}])
+        self.assertEqual(quote.lines, [{"kind": "rental", "label": "2 days × ₹1,000", "amount": "2000.00"}])
 
     def test_long_rental_discount_tiers(self):
         monday = next_weekday(MONDAY)

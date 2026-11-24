@@ -142,7 +142,7 @@ export function TripDetail() {
                 <div><small>Pickup</small><b className="mono">{dateLabel(b.start_date)} · {clock(b.pickup_time)}</b></div>
                 <div><small>Return</small><b className="mono">{dateLabel(b.end_date)} · {clock(b.return_time)}</b></div>
               </div>
-              <p>{b.vehicle.location ?? "Location on request"} · hosted by {host}</p>
+              <p>{b.vehicle.location ?? "Location on request"} · hosted by {vehicle.data?.host_name || "a local owner"}</p>
             </div>
           </section>
           <RefundGauge booking={b} />

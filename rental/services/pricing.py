@@ -14,6 +14,7 @@ from django import forms
 from django.conf import settings
 
 from ..models import billable_days
+from .events import rupees
 
 CENT = Decimal("0.01")
 MAX_TOTAL = Decimal("99999999.99")
@@ -75,13 +76,13 @@ def price_rental(vehicle, pickup_at, return_at):
 
     lines = []
     if weekend_rate == weekday_rate:
-        lines.append(line("rental", f"{days} day{'s' if days != 1 else ''} × ₹{weekday_rate}", weekday_rate * days))
+        lines.append(line("rental", f"{days} day{'s' if days != 1 else ''} × {rupees(weekday_rate)}", weekday_rate * days))
     else:
         if weekday_days:
-            lines.append(line("weekday", f"{weekday_days} weekday{'s' if weekday_days != 1 else ''} × ₹{weekday_rate}",
+            lines.append(line("weekday", f"{weekday_days} weekday{'s' if weekday_days != 1 else ''} × {rupees(weekday_rate)}",
                               weekday_rate * weekday_days))
         if weekend_days:
-            lines.append(line("weekend", f"{weekend_days} weekend day{'s' if weekend_days != 1 else ''} × ₹{weekend_rate}",
+            lines.append(line("weekend", f"{weekend_days} weekend day{'s' if weekend_days != 1 else ''} × {rupees(weekend_rate)}",
                               weekend_rate * weekend_days))
     subtotal = money(weekday_rate * weekday_days + weekend_rate * weekend_days)
     minimum, percent = discount_percent_for(days)

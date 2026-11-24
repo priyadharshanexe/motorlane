@@ -1,3 +1,4 @@
+from datetime import date, time, timedelta
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -14,7 +15,7 @@ class BookingApiTests(TestCase):
         vehicle = Vehicle.objects.create(name="Car", vehicle_type="Car", price_per_day=125)
         user = get_user_model().objects.create_user(username="renter")
         client.force_login(user)
-        today = timezone.localdate().isoformat()
+        today = (timezone.localdate() + timedelta(days=1)).isoformat()  # a pickup time today may have passed
         data = {"vehicle_id": vehicle.pk, "start_date": today, "end_date": today}
         self.assertEqual(client.post(url, data, secure=True).status_code, 403)
         csrf = client.get(reverse("api_session"), secure=True).json()["csrf_token"]
@@ -28,6 +29,21 @@ class BookingApiTests(TestCase):
         response = client.post(url, data, secure=True, HTTP_X_CSRFTOKEN=csrf,
                                HTTP_REFERER="https://testserver/")
         self.assertEqual(response.status_code, 409)
+
+    def test_a_pickup_time_that_has_passed_today_is_refused(self):
+        from unittest.mock import patch
+        from datetime import datetime
+        vehicle = Vehicle.objects.create(name="Car", vehicle_type="Car", price_per_day=125)
+        self.client.force_login(get_user_model().objects.create_user(username="late-renter"))
+        noon = timezone.make_aware(datetime.combine(timezone.localdate(), time(12, 0)))
+        base = {"vehicle_id": vehicle.pk, "start_date": noon.date().isoformat(), "end_date": noon.date().isoformat(),
+                "contact_name": "Test renter", "contact_phone": "+91 99999 00000", "accepted_conditions": True}
+        with patch("django.utils.timezone.now", return_value=noon):
+            response = self.client.post(reverse("api_bookings"), {**base, "pickup_time": "09:00", "return_time": "11:00"}, secure=True)
+            self.assertContains(response, "That pickup time has passed", status_code=400)
+            response = self.client.post(reverse("api_bookings"), {**base, "pickup_time": "13:00", "return_time": "18:00"}, secure=True)
+            self.assertEqual(response.status_code, 201)
+
 
 class FavoritesApiTests(TestCase):
     def setUp(self):
@@ -77,7 +93,7 @@ class CheckoutApiTests(TestCase):
         user = get_user_model().objects.create_user(username='checkout-renter')
         self.client.force_login(user)
         vehicle = Vehicle.objects.create(name='Car', vehicle_type='Car', price_per_day=125)
-        day = timezone.localdate().isoformat()
+        day = (timezone.localdate() + timedelta(days=1)).isoformat()
         data = {'vehicle_id': vehicle.pk, 'start_date': day, 'end_date': day, 'checkout': True}
         response = self.client.post(reverse('api_bookings'), data, secure=True)
         self.assertEqual(response.status_code, 400)

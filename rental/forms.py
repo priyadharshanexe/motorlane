@@ -43,6 +43,9 @@ class BookingDatesForm(forms.Form):
             data["return_time"] = data.get("return_time") or DEFAULT_RETURN_TIME
             if start == end and data["return_time"] <= data["pickup_time"]:
                 self.add_error("return_time", "The return time must be after the pickup time.")
+            elif rental_window(start, end, data["pickup_time"], data["return_time"])[0] < timezone.now():
+                # a date of today is fine, a time that has already passed is not
+                self.add_error("pickup_time", "That pickup time has passed. Choose a later time today.")
         return data
 
     @property

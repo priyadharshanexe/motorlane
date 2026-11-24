@@ -60,6 +60,11 @@ class AuthPathTests(TestCase):
         self.assertIsNone(self.session()["user"])
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("/app/verify-email/", mail.outbox[0].body)
+        # Motorlane's own wording and look, not allauth's "[site] ... Thank you for using example.com"
+        message = mail.outbox[0]
+        self.assertTrue(message.subject.startswith("Motorlane · "), message.subject)
+        self.assertNotIn("Thank you for using", message.body)
+        self.assertIn("MOTORLANE", message.alternatives[0][0])
 
     def test_repeated_wrong_passwords_are_rate_limited(self):
         codes = [[e.get("code") for e in self.login(password=f"Wrong-Password-{i}").json()["errors"]] for i in range(6)]
@@ -86,6 +91,7 @@ class AuthPathTests(TestCase):
     def test_password_reset_replaces_the_old_password(self):
         self.assertEqual(self.auth("password/request", {"email": self.user.email}).status_code, 200)
         key = unquote(re.search(r"/app/reset-password/([^\s]+)", mail.outbox[0].body).group(1))
+        self.assertEqual(mail.outbox[0].subject, "Motorlane · Reset your password")
         new = "Fresh-Kerb-Example-2468"
         self.assertIn(self.auth("password/reset", {"key": key, "password": new}).status_code, (200, 401))
         self.auth("session", method="delete")
