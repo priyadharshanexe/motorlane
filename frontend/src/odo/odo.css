@@ -18,7 +18,7 @@
   min-height: 100vh; overflow-x: clip; background: var(--tarmac); color: var(--chalk);
   font: 16px/1.5 var(--text);
 }
-.od-app[data-theme="light"] {
+.od-app[data-theme="light"], html[data-theme="light"] .od-app.static-first {
   --tarmac: #F3F1EC; --raised: #FFFFFF; --kerb: #D9D5CC; --chalk: #16181B; --dust: #5A5E66;
   --lane-text: #946000; --asphalt: #74777C; --ghost: #CFCAC0; --wheel: #FFFFFF;
   --pending: #946000; --confirmed: #0B5CA8; --progress: #0E7A4E; --stop: #B3261E; --reflector: #16181B;
@@ -27,6 +27,7 @@
 }
 .od-boot { min-height: 100vh; background: #121417; }
 @media (prefers-color-scheme: light) { .od-boot { background: #F3F1EC; } }
+html[data-theme="light"] .od-boot { background: #F3F1EC; } html[data-theme="dark"] .od-boot { background: #121417; }
 
 /* base, winning over the app's global element styles */
 .od-app *, .od-app *::before, .od-app *::after { box-sizing: border-box; }
@@ -221,6 +222,8 @@
   background: var(--tarmac); border: 2px solid var(--kerb); z-index: 3; }
 .od-tag-media { position: relative; }
 .od-tag-media > a { display: block; }
+/* skeleton: until a photo arrives, its box is a tinted plate (a photo's own colour, when known, sits on top) */
+.od-tag-media > a, .od-tag-media > .photo { background: var(--ghost); }
 .od-wipe .photo { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); transition: clip-path .7s var(--ease-out); }
 .od-wipe.loaded .photo { clip-path: polygon(0 0, 100% 0, 100% 92%, 0 100%); }
 .od-tag .photo, .od-tag .photo.placeholder { width: 100%; height: auto; aspect-ratio: 1.55; object-fit: cover; display: block; border-radius: 0;

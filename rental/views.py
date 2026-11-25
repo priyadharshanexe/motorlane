@@ -165,11 +165,24 @@ def _key_tag(vehicle, index):
             f'<span class="vehicle-rating">{rating}</span></div></article>')
 
 
-THEME_SCRIPT = ("(function(a){var t;try{t=localStorage.getItem('motorlane-theme')}catch(e){}"
-                "if(t!=='dark'&&t!=='light')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';"
+# Theme before paint. HEAD_BOOT is the first thing in <head>, ahead of every stylesheet: it picks the theme (saved
+# choice, else the system) and puts it on <html> with the matching background, so even a half-streamed page on a slow
+# connection never paints in the wrong colours. THEME_SCRIPT is the static shell's first child: it copies that theme
+# onto the shell before its header is parsed; THEME_LABEL then sets the header's Day/Night button.
+PICK_THEME = ("var t;try{t=localStorage.getItem('motorlane-theme')}catch(e){}"
+              "if(t!=='dark'&&t!=='light')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';")
+HEAD_STYLE = ("<style>html{background:#121417;color:#EDEAE3;color-scheme:dark}"
+              "html[data-theme=light]{background:#F3F1EC;color:#16181B;color-scheme:light}</style>")
+THEME_SCRIPT = ("(function(a){var t=document.documentElement.dataset.theme;if(t!=='dark'&&t!=='light'){" + PICK_THEME + "}"
                 "a.dataset.theme=t;if(matchMedia('(prefers-reduced-motion: reduce)').matches)a.dataset.motion='reduced';"
-                "if(t==='light'){var b=a.querySelector('.od-theme');b.firstChild.textContent='☾';b.lastChild.textContent='Night'}"
                 "})(document.currentScript.parentElement)")
+THEME_LABEL = ("(function(a){if(a.dataset.theme==='light'){var b=a.querySelector('.od-theme');"
+               "b.firstChild.textContent='☾';b.lastChild.textContent='Night'}})(document.currentScript.parentElement)")
+
+
+def head_boot(nonce):
+    return (f'{HEAD_STYLE}<script nonce="{escape(nonce)}">(function(d){{{PICK_THEME}d.dataset.theme=t}})'
+            f'(document.documentElement)</script>')
 
 
 def _shell(nonce, page):
@@ -184,8 +197,8 @@ def _shell(nonce, page):
         '<button type="button" class="od-theme" aria-label="Switch colours"><span aria-hidden="true">☀</span><span class="od-theme-label">Day</span></button>'
         '<details class="od-menu"><summary aria-label="Open navigation menu"><span class="od-burger" aria-hidden="true"><i></i><i></i><i></i></span>'
         '<span class="od-menu-label">Menu</span></summary></details></div></header>')
-    return (f'<div class="od-app static-first" data-theme="dark" data-motion="full">{header}'
-            f'<script nonce="{escape(nonce)}">{THEME_SCRIPT}</script>'
+    return (f'<div class="od-app static-first" data-theme="dark" data-motion="full"><script nonce="{escape(nonce)}">{THEME_SCRIPT}</script>'
+            f'{header}<script nonce="{escape(nonce)}">{THEME_LABEL}</script>'
             f'<main id="main" class="od-main">{page}</main>'
             '<div class="od-spinner" role="status"><span class="od-spinner-gauge" aria-hidden="true"><i></i></span>'
             '<span class="od-spinner-text"><span class="od-spinner-label">Starting engine</span>'
@@ -237,6 +250,7 @@ def react_app(request):
     if not index.is_file():
         raise Http404("Build the frontend before opening the marketplace.")
     html = index.read_text(encoding="utf-8")
+    html = html.replace("<head>", "<head>" + head_boot(getattr(request, "csp_nonce", "")), 1)
     if ROUTE_HINTS in html:
         try:
             hints, static = _route_hints(request, request.path[len("/app"):])

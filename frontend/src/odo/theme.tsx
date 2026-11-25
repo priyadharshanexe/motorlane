@@ -20,6 +20,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(initialTheme);
   useEffect(() => {
     document.documentElement.style.colorScheme = theme;
+    document.documentElement.dataset.theme = theme;  // the page background around the app (set first in <head>)
     return () => { document.documentElement.style.colorScheme = ""; };
   }, [theme]);
   const toggle = () => setTheme(current => {

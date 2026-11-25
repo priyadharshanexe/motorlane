@@ -55,7 +55,7 @@ class FirstPaintTests(TestCase):
         html = self.get(f"/app/vehicles/{self.vehicle.pk}")
         self.assertEqual(self.initial(html)[f"vehicles/{self.vehicle.pk}/"]["name"], "Splendor </script>")
         self.assertIn("<h1>Splendor &lt;/script&gt;</h1>", html)
-        self.assertEqual(html.count("</script>"), 2)  # the data block and the theme script: the name cannot add one
+        self.assertEqual(html.count("</script>"), 4)  # head theme, shell theme, button label, data: the name cannot add one
 
     def test_a_missing_vehicle_or_a_failure_still_serves_the_page(self):
         self.assertIn('<div id="root"></div>', self.get("/app/vehicles/999999"))
@@ -91,6 +91,16 @@ class FirstPaintTests(TestCase):
         self.assertTrue(all("od-tag-media" in frame[:frame.index(img)].rsplit("<article", 1)[-1] for img in imgs))
         nonce = re.search(r"script-src 'self' 'nonce-([^']+)'", self.client.get("/app/vehicles", secure=True)["Content-Security-Policy"])
         self.assertIsNotNone(nonce)
-        self.assertRegex(frame, r'<script nonce="[^"]+">\(function\(a\)\{var t;try\{t=localStorage')
+        self.assertRegex(frame, r'<script nonce="[^"]+">\(function\(a\)\{var t=document\.documentElement\.dataset\.theme')
         # the stylesheets that size the frame load before first paint (not as preloads)
         self.assertNotIn('rel="preload" as="style"', html)
+
+    def test_the_theme_and_background_are_set_before_any_stylesheet(self):
+        """On a slow connection the page paints while it streams: the theme must already be on <html> (with its
+        background) before the first stylesheet, and on the shell before its header."""
+        html = self.get("/app/vehicles")
+        head = html[html.index("<head>"):]
+        self.assertTrue(head.startswith("<head><style>html{background:#121417"), head[:80])
+        self.assertLess(head.index("document.documentElement"), head.index("<title>"))
+        shell = html[html.index('<div class="od-app static-first"'):]
+        self.assertLess(shell.index("<script"), shell.index('<header class="od-header">'))
