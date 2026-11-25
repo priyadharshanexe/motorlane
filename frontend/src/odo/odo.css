@@ -84,7 +84,7 @@ html[data-theme="light"] .od-boot { background: #F3F1EC; } html[data-theme="dark
 .od-nav a { color: var(--chalk) !important; padding: 8px 14px; border-radius: 999px; font-weight: 600; font-size: 14px; }
 .od-nav a.active { background: var(--lane); color: var(--on-lane) !important; }
 .od-header-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-.od-host { color: var(--chalk) !important; font-weight: 600; font-size: 14px; background: var(--halo); padding: 9px 14px; border-radius: 999px; }
+.od-host { white-space: nowrap; color: var(--chalk) !important; font-weight: 600; font-size: 14px; background: var(--halo); padding: 9px 14px; border-radius: 999px; }
 .od-theme { display: inline-flex; align-items: center; gap: 6px; border: 2px solid var(--chalk) !important; background: var(--halo) !important;
   color: var(--chalk) !important; padding: 6px 12px; min-height: 40px !important; font: 700 13px var(--display) !important; text-transform: uppercase; }
 .od-menu { position: relative; }
@@ -433,6 +433,13 @@ html[data-theme="light"] .od-boot { background: #F3F1EC; } html[data-theme="dark
   .od-catalog-body, .od-detail { grid-template-columns: 1fr; }
   .od-rail { position: static; }
   .od-reserve { position: static; }
+}
+/* Tablet: the full header did not fit (List your vehicle wrapped onto three lines, Menu ran off the edge). The theme
+   and menu buttons keep their icons, as on phones, and the gaps tighten; every link stays. */
+@media (max-width: 1000px) and (min-width: 761px) {
+  .od-theme-label, .od-menu-label { display: none; }
+  .od-header { gap: 12px; }
+  .od-nav a { padding: 8px 11px; }
 }
 @media (max-width: 760px) {
   .od-nav, .od-host, .od-theme-label, .od-menu-label { display: none; }

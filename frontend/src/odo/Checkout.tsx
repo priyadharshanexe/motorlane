@@ -13,7 +13,7 @@ import { useSession, useWrite } from "../requests";
 import { Photo } from "./shared";
 import { photoTransition } from "./KeyTag";
 import { Odometer, reducedMotion } from "./primitives";
-import { ErrorSign, RoadSign } from "./states";
+import { ErrorSign, RoadSign, VehicleMissing } from "./states";
 import { SLOTS, TimeRoad, toSlot, toTime } from "./TimeRoad";
 import type { Blocked } from "./TimeRoad";
 import { Hud, useChapters } from "./world";
@@ -120,7 +120,7 @@ export function Checkout() {
       Select a pickup date and a return date on or after pickup to continue.</RoadSign></div>
   );
   if (vehicle.isPending) return <div className="od-page-loading" style={{ minHeight: "100vh" }} />;
-  if (!vehicle.data) return <div className="od-page"><ErrorSign error={vehicle.error} retry={() => vehicle.refetch()} /></div>;
+  if (!vehicle.data) return <VehicleMissing error={vehicle.error} retry={() => vehicle.refetch()} />;
   const v = vehicle.data, q = quote.data;
   const due = q ? Number(q.due_now) : 0;
 

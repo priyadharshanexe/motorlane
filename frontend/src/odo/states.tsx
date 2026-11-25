@@ -2,6 +2,7 @@
 // the redesigned signed-in pages. No illustrations of people, no emoji.
 import type { ReactNode } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
+import { ApiError } from "../api";
 import { useSession } from "../requests";
 
 type Sign = "end" | "diversion" | "noentry" | "maintenance";
@@ -43,6 +44,14 @@ export function ErrorSign({ error, retry }: { error: unknown; retry?: () => void
 }
 
 /** Redirects to sign-in (and back afterwards) when there is no session; reserves the viewport while it checks. */
+/** A vehicle that is archived, paused or was never there answers 404: say so in the site's own words instead of
+ * showing the server's sentence ("No Vehicle matches the given query."). Anything else is a real error. */
+export function VehicleMissing({ error, retry }: { error: unknown; retry?: () => void }) {
+  if (error instanceof ApiError && error.status === 404) return <div className="od-page"><RoadSign kind="end" title="This ride isn't on the road."
+    action={<Link className="od-cta" to="/vehicles">See every ride</Link>}>The owner may have paused or archived it, or the link may be mistyped.</RoadSign></div>;
+  return <div className="od-page"><ErrorSign error={error} retry={retry} /></div>;
+}
+
 export function RequireSession({ children }: { children: ReactNode }) {
   const session = useSession();
   const location = useLocation();

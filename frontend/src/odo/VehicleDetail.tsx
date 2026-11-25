@@ -14,6 +14,7 @@ import { Price, PriceBreakdown } from "./pricing";
 import { RentalCalendar } from "./RentalCalendar";
 import { useSession } from "../requests";
 import { Busy, Notice } from "./shared";
+import { VehicleMissing } from "./states";
 import { photoTransition } from "./KeyTag";
 import { Odometer, reducedMotion } from "./primitives";
 import { Hud, useChapters } from "./world";
@@ -37,7 +38,7 @@ function Reservation({ id, params }: { id: string | undefined; params: URLSearch
   const root = useRef<HTMLDivElement>(null);
   useChapters(root, [query.data?.id]);
   if (query.isPending) return <div className="od-page-loading" style={{ minHeight: "100vh" }}><Busy /></div>;  // keeps the footer below the fold
-  if (!query.data) return <Notice error={query.error} />;
+  if (!query.data) return <VehicleMissing error={query.error} retry={() => query.refetch()} />;
   const v = query.data, ready = valid && Boolean(quote.data) && !quote.isError;
   const back = new URLSearchParams(params);
   back.delete("start_date"); back.delete("end_date");
