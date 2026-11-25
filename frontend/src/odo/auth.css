@@ -10,6 +10,20 @@
 .od-auth-panel .od-form { gap: 10px; }
 .od-auth-links { color: var(--dust); font-size: 14px; }
 .od-google { margin: 0; }
+/* Google's sign-in button, per its branding guidelines: 40px tall, 12px side padding, a 20px G, Roboto Medium 14px,
+   pill radius. Dark theme: #131314 fill, #8E918F border, #E3E3E3 text. Light theme: white, #747775, #1F1F1F. */
+.od-app .gsi-button { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 40px; padding: 0 12px;
+  border-radius: 20px; border: 1px solid #8E918F; background: #131314; color: #E3E3E3; cursor: pointer;
+  font: 500 14px/20px Roboto, "Segoe UI", system-ui, -apple-system, Arial, sans-serif; letter-spacing: .25px; text-transform: none;
+  transition: background-color .218s, box-shadow .218s; -webkit-appearance: none; appearance: none; }
+.od-app .gsi-logo { width: 20px; height: 20px; flex: none; }
+.od-app .gsi-button:hover { background: #2a2a2c; box-shadow: 0 1px 2px 0 #3c40434d, 0 1px 3px 1px #3c404326; }
+.od-app .gsi-button:active { background: #353537; }
+.od-app .gsi-button:focus-visible { outline: 2px solid #A8C7FA; outline-offset: 2px; }
+.od-app[data-theme="light"] .gsi-button { background: #FFFFFF; border-color: #747775; color: #1F1F1F; }
+.od-app[data-theme="light"] .gsi-button:hover { background: #F7F8F8; }
+.od-app[data-theme="light"] .gsi-button:active { background: #EDEEEE; }
+.od-app[data-theme="light"] .gsi-button:focus-visible { outline-color: #0B57D0; }
 /* the key: turns a quarter and the panel's edge lights green when signing in succeeds */
 .od-auth-key { position: absolute; top: 22px; right: 24px; width: 46px; height: 22px; transform-origin: 11px 11px; transition: transform .55s var(--ease-spring); }
 .od-auth-key .ring { position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%; border: 4px solid var(--lane); box-sizing: border-box; }
