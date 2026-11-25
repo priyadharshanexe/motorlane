@@ -32,6 +32,22 @@ const palette = (light: boolean) => light ? {
   shadow: 0, poolOpacity: 0.16, moon: true, leaf2: "#1F3A28", haze: "#2A251D",
 };
 
+/** An open, four-sided beam (a rectangular frustum) from the lamp head down to the road: the top matches the
+ * head (1.4 x 0.22), the bottom matches the pool (3.6 x 2.8); height 5.1, centred on y = 0 like a cone. */
+const beamGeometry = (() => {
+  const h = 2.55, top = [0.7, 0.11], bottom = [1.8, 1.4];
+  const corners = (y: number, [x, z]: number[]) => [[-x, y, -z], [x, y, -z], [x, y, z], [-x, y, z]];
+  const t = corners(h, top), b = corners(-h, bottom), pos: number[] = [];
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    pos.push(...b[i], ...t[j], ...b[j], ...b[i], ...t[i], ...t[j]);  // wound outwards: drawn front-side only, one even sheet of light
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
+})();
+
 /** A soft round blob (light pools at night, contact shadows by day). */
 function radialTexture() {
   // 256px with a gentle falloff and mipmaps, so the edge stays soft even when seen at a grazing angle.
@@ -359,8 +375,8 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
       set(poles.current, i, side * 5.6, 2.6 * g, z, g, g, g);
       set(lamps.current, i, side * 4.6, 5.1 * g, z, g, g, g);
       // The pool and the light cone stay attached to their lamp and leave the frame with it (never culled early).
-      set(pools.current, i, side * 2.6, 0.015, z, 3.2 * g, 4 * g, 1, -Math.PI / 2);
-      set(cones.current, i, side * 3.4, 2.55 * g, z, g, g, g);
+      set(pools.current, i, side * 3.9, 0.015, z, 3.8 * g, 3.0 * g, 1, -Math.PI / 2);  // the beam's footprint: it lands on its own pool
+      set(cones.current, i, side * 3.9, 2.55 * g, z, g, g, g);  // under the head's inner end (the head spans 3.6 to 5.6)
     }
     // Paddy-field rows on both sides: thin furrows that strobe past and sell the speed.
     for (let i = 0; i < ROWS / k; i++) {
@@ -457,10 +473,11 @@ function Scene({ light, places, lite, onSlow }: { light: boolean; places: string
       <instancedMesh ref={canopies} args={[undefined, undefined, TREES]}><icosahedronGeometry args={[1, 1]} /><Lit color={colors.tree} light={light} /></instancedMesh>
       <instancedMesh ref={poles} args={[undefined, undefined, LIGHTS]}><boxGeometry args={[0.1, 5.2, 0.1]} /><Lit color={colors.post} light={light} /></instancedMesh>
       <instancedMesh ref={lamps} args={[undefined, undefined, LIGHTS]}><boxGeometry args={[2, 0.12, 0.22]} /><meshBasicMaterial color={colors.lamp} toneMapped={false} /></instancedMesh>
-      {/* Faint additive light cones under each lamp at night: the "rays" that make the pools read as light. */}
+      {/* Faint additive light beams under each lamp at night: a rectangular spill that starts at the lamp's
+          rectangular head and widens to its pool, so the beam has the lamp's own shape (not a round cone). */}
       <instancedMesh ref={cones} args={[undefined, undefined, LIGHTS]} visible={colors.poolOpacity > 0}>
-        <coneGeometry args={[1.9, 5.1, 28, 1, true]} />
-        <meshBasicMaterial color={colors.pool} transparent opacity={0.045} blending={THREE.AdditiveBlending} depthWrite={false} side={THREE.DoubleSide} />
+        <primitive object={beamGeometry} attach="geometry" />
+        <meshBasicMaterial color={colors.pool} transparent opacity={0.045} blending={THREE.AdditiveBlending} depthWrite={false} side={THREE.FrontSide} />
       </instancedMesh>
       <instancedMesh ref={pools} args={[undefined, undefined, LIGHTS]} visible={colors.poolOpacity > 0}>
         <planeGeometry args={[1, 1]} />
