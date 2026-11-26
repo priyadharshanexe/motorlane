@@ -27,6 +27,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from rental.db import skip_locked
 
 from ..models import Booking, Payment, RefundIntent, WebhookEvent
 from ..services.events import record_paid, record_refund_issued, record_refunded
@@ -150,7 +151,7 @@ def process_refund(intent_id, now=None):
     """Send one due refund to the provider. Safe to call any number of times, from any process."""
     now = now or timezone.now()
     with transaction.atomic():
-        intent = (RefundIntent.objects.select_for_update(skip_locked=True).select_related("payment")
+        intent = (RefundIntent.objects.select_for_update(skip_locked=skip_locked()).select_related("payment")
                   .filter(pk=intent_id, status=RefundIntent.Status.PENDING, next_attempt_at__lte=now).first())
         if intent is None:
             return None

@@ -14,6 +14,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
+from rental.db import skip_locked
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,7 @@ def deliver(message_id, now=None):
     now = now or timezone.now()
     with transaction.atomic():
         # The row lock is held while sending, so two workers never send the same message at once.
-        message = (NotificationOutbox.objects.select_for_update(skip_locked=True)
+        message = (NotificationOutbox.objects.select_for_update(skip_locked=skip_locked())
                    .filter(pk=message_id, status=NotificationOutbox.Status.PENDING, next_attempt_at__lte=now).first())
         if message is None:
             return False

@@ -19,6 +19,7 @@ import logging
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from rental.db import skip_locked
 
 from ..models import Booking
 from .events import record_event
@@ -57,7 +58,7 @@ def expire_bookings(now=None, batch_size=200):
     expired = []
     while True:
         with transaction.atomic():
-            batch = list(stale_bookings(now).select_for_update(skip_locked=True).order_by("pk")[:batch_size])
+            batch = list(stale_bookings(now).select_for_update(skip_locked=skip_locked()).order_by("pk")[:batch_size])
             for booking in batch:
                 previous, reason = booking.status, expiry_reason(booking, now)
                 booking.status = Booking.Status.EXPIRED

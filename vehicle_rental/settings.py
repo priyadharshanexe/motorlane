@@ -104,7 +104,8 @@ WSGI_APPLICATION = 'vehicle_rental.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
+        # TiDB (MySQL-compatible, used by the hosted demo) needs PingCAP's backend.
+        'ENGINE': 'django_tidb' if os.getenv("MYSQL_TIDB") == "1" else 'django.db.backends.mysql',
         'NAME': os.environ["MYSQL_NAME"],
         'USER': os.environ["MYSQL_USER"],
         'PASSWORD': os.environ["MYSQL_PASSWORD"],
@@ -115,6 +116,8 @@ DATABASES = {
         'CONN_HEALTH_CHECKS': True,
         # Hosted MySQL (e.g. Aiven) accepts encrypted connections only.
         'OPTIONS': {'ssl_mode': 'REQUIRED'} if os.getenv("MYSQL_SSL") == "1" else {},
+        # MySQL's default collation is case-insensitive; TiDB's is not, so say it.
+        'TEST': {'CHARSET': 'utf8mb4', 'COLLATION': 'utf8mb4_general_ci'} if os.getenv("MYSQL_TIDB") == "1" else {},
     }
 }
 
