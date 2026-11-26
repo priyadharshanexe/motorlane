@@ -147,7 +147,7 @@ class ReservationConcurrencyTests(TransactionTestCase):
             with ThreadPoolExecutor(max_workers=2) as pool:
                 results = list(pool.map(publish, ["New listing A", "New listing B"]))
         self.assertCountEqual([status for status, _ in results], [409, 201])
-        self.assertIn(b"You can list up to three vehicles at a time.", next(
+        self.assertIn(b"You can list up to 3 vehicles at a time.", next(
             body for status, body in results if status == 409
         ))
         self.assertEqual(Vehicle.objects.filter(owner=owner, archived_at__isnull=True).count(), 3)

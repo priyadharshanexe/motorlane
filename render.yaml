@@ -49,6 +49,8 @@ services:
         value: "1"
       - key: DEMO_RESET_HOUR
         value: "3"
+      - key: MAX_ACTIVE_LISTINGS     # the demo owner holds the 10-car sample fleet
+        value: "12"
       - key: PAYMENT_PROVIDER
         value: fake
       - key: RENTAL_DEMO_PASSWORD   # shared by the demo accounts

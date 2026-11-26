@@ -269,6 +269,9 @@ RENTAL_CANCELLATION_FEE_PERCENT = env_int("RENTAL_CANCELLATION_FEE_PERCENT", 20)
 # "razorpay" needs rzp_test_ keys. `manage.py check` refuses anything else.
 PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "fake" if DEBUG else "").strip().lower()
 DEMO_MODE = os.getenv("DJANGO_DEMO_MODE") == "1"
+# Listings one owner may have at a time. The public demo raises it, because its demo owner
+# already holds the whole sample fleet and visitors should still be able to list a vehicle.
+MAX_ACTIVE_LISTINGS = env_int("MAX_ACTIVE_LISTINGS", 3)
 # A public demo can opt in to being wiped and re-seeded once a day, at or after this local hour.
 DEMO_DAILY_RESET = DEMO_MODE and os.getenv("DEMO_DAILY_RESET") == "1"
 DEMO_RESET_HOUR = env_int("DEMO_RESET_HOUR", 3)

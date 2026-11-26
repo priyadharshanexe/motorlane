@@ -9,9 +9,6 @@ from django.utils import timezone
 from rental.models import Profile, Vehicle
 from rental.services.photos import add_photo
 
-# Seed-only demo accounts that own the catalog (the public logins are owner and renter).
-CATALOG_HOSTS = ("host", "operator", "partner")
-
 CATALOG = [
     ("Hyundai i20", "Car", "Madurai", "1800", "Manual", 5, 2018, "demo-car.webp",
      "A practical five-seat hatchback for city travel and weekend trips."),
@@ -51,26 +48,21 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if not (settings.DEBUG or settings.DEMO_MODE):
             raise CommandError("This catalog reset is for local development only.")
-        # The catalog belongs to the background demo hosts, not to the public demo owner:
-        # owners may hold only MAX_ACTIVE_LISTINGS listings, and a visitor signed in as
-        # owner@rental-demo.example must still be able to try "List a vehicle".
-        hosts = [Profile.objects.get(user__username=f"rental-demo-{role}") for role in CATALOG_HOSTS]
+        owner = Profile.objects.get(user__username="rental-demo-owner")
         root = Path(__file__).resolve().parents[2] / "demo_images"
         # Validate every image before changing database state.
         images = {row[7]: (root / row[7]).read_bytes() for row in CATALOG}
         marker = "Illustrative demo listing."
-        current = list(Vehicle.objects.filter(owner__user__username__startswith="rental-demo-",
-                                              description__startswith=marker))
+        current = list(Vehicle.objects.filter(owner=owner, description__startswith=marker))
         keep = [v.pk for v in current]
         count = 0
         if options["archive_existing"]:
             count = Vehicle.objects.filter(archived_at__isnull=True).exclude(pk__in=keep).update(
                 archived_at=timezone.now(), is_available=False)
-        for index, (name, kind, city, rate, transmission, seats, year, image, description) in enumerate(CATALOG):
+        for name, kind, city, rate, transmission, seats, year, image, description in CATALOG:
             vehicle = next((v for v in current if v.name == name), None)
             if vehicle is None:
-                vehicle = Vehicle(name=name)
-            vehicle.owner = hosts[index % len(hosts)]
+                vehicle = Vehicle(owner=owner, name=name)
             vehicle.vehicle_type = kind
             vehicle.location = city
             vehicle.price_per_day = Decimal(rate)

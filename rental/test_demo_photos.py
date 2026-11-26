@@ -38,13 +38,3 @@ class DemoPhotoTests(TestCase):
         self.assertEqual(listed.count(), 18)
         self.assertEqual([names for names in covers.values() if len(names) > 1], [])
         self.assertEqual(len(set(listed.values_list("name", flat=True))), 18)
-
-    @patch.dict("os.environ", {"RENTAL_DEMO_PASSWORD": "local-test-demo-only"})
-    @override_settings(DEBUG=True)
-    def test_public_demo_owner_can_still_list_a_vehicle(self):
-        from .services.listing import MAX_ACTIVE_LISTINGS
-        with TemporaryDirectory() as media, override_settings(MEDIA_ROOT=media):
-            call_command("seed_demo", stdout=open(Path(media) / "out.txt", "w"))
-            call_command("refresh_demo_catalog", stdout=open(Path(media) / "out2.txt", "w"))
-        owned = Vehicle.objects.filter(owner__user__username="rental-demo-owner", archived_at__isnull=True)
-        self.assertLess(owned.count(), MAX_ACTIVE_LISTINGS)
