@@ -4,6 +4,8 @@ Thumbnail file names contain a hash of their content, so a changed thumbnail alw
 URL; they are marked immutable for a year. Originals keep a one-day cache. Production serves
 the same files from Caddy with the same headers (deploy/Caddyfile).
 """
+import mimetypes
+
 from django.conf import settings
 from django.http import Http404
 from django.views.static import serve
@@ -11,6 +13,10 @@ from django.views.static import serve
 THUMBNAILS = "vehicles/thumbs/"
 IMMUTABLE = "public, max-age=31536000, immutable"
 ONE_DAY = "public, max-age=86400"
+
+# Python 3.11 does not know .webp; without this every photo goes out as
+# application/octet-stream, which strict browsers refuse under nosniff.
+mimetypes.add_type("image/webp", ".webp")
 
 
 def serve_media(request, path):

@@ -130,6 +130,7 @@ class FastCardImageTests(TestCase):
         _, photo = self.add_real_photo()
         thumb = self.client.get(f"/media/{photo.thumb_small.name}", secure=True)
         self.assertEqual(thumb["Cache-Control"], "public, max-age=31536000, immutable")
+        self.assertEqual(thumb["Content-Type"], "image/webp")
         original = self.client.get(f"/media/{photo.image.name}", secure=True)
         self.assertEqual(original["Cache-Control"], "public, max-age=86400")
         thumb.close()
