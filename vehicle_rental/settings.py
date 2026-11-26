@@ -41,6 +41,9 @@ SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 DEBUG = os.getenv("DJANGO_DEBUG") == "1"
 
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+# Render names the service's public host itself; accept it without extra configuration.
+if os.getenv("RENDER_EXTERNAL_HOSTNAME"):
+    ALLOWED_HOSTS.append(os.environ["RENDER_EXTERNAL_HOSTNAME"])
 
 
 # Application definition
@@ -110,6 +113,8 @@ DATABASES = {
         # Reuse connections across requests; health checks drop ones the server closed.
         'CONN_MAX_AGE': env_int("DJANGO_CONN_MAX_AGE", 60),
         'CONN_HEALTH_CHECKS': True,
+        # Hosted MySQL (e.g. Aiven) accepts encrypted connections only.
+        'OPTIONS': {'ssl_mode': 'REQUIRED'} if os.getenv("MYSQL_SSL") == "1" else {},
     }
 }
 

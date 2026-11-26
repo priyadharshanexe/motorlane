@@ -1,0 +1,56 @@
+# Render Blueprint: the public Motorlane demo on Render's free tier.
+# MySQL comes from Aiven's free plan (no card); paste its details when Render
+# asks for the values marked sync: false.
+services:
+  - type: web
+    name: motorlane
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: sh docker/render.sh
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: DJANGO_TRUST_HTTPS_PROXY
+        value: "1"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_ALLOWED_HOSTS
+        value: 127.0.0.1,localhost
+      - key: SITE_URL            # https://<your-service>.onrender.com
+        sync: false
+      - key: MYSQL_HOST          # Aiven: Host
+        sync: false
+      - key: MYSQL_PORT          # Aiven: Port
+        sync: false
+      - key: MYSQL_NAME
+        value: defaultdb
+      - key: MYSQL_USER
+        value: avnadmin
+      - key: MYSQL_PASSWORD      # Aiven: Password
+        sync: false
+      - key: MYSQL_SSL
+        value: "1"
+      - key: GUNICORN_WORKERS
+        value: "2"
+      - key: DJANGO_DEMO_MODE
+        value: "1"
+      - key: DEMO_DAILY_RESET
+        value: "1"
+      - key: DEMO_RESET_HOUR
+        value: "3"
+      - key: PAYMENT_PROVIDER
+        value: fake
+      - key: RENTAL_DEMO_PASSWORD   # shared by the demo accounts
+        sync: false
+      - key: DJANGO_EMAIL_BACKEND
+        value: django.core.mail.backends.console.EmailBackend
+      - key: GOOGLE_CLIENT_ID       # optional
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET   # optional
+        sync: false
