@@ -1,6 +1,6 @@
 # Render Blueprint: the public Motorlane demo on Render's free tier.
-# MySQL comes from Aiven's free plan (no card); paste its details when Render
-# asks for the values marked sync: false.
+# The database is TiDB Cloud Starter (free, no card, MySQL-compatible); paste its
+# connection details when Render asks for the values marked sync: false.
 services:
   - type: web
     name: motorlane
@@ -24,17 +24,19 @@ services:
         value: 127.0.0.1,localhost
       - key: SITE_URL            # https://<your-service>.onrender.com
         sync: false
-      - key: MYSQL_HOST          # Aiven: Host
+      - key: MYSQL_HOST          # TiDB: Connect > Host
         sync: false
-      - key: MYSQL_PORT          # Aiven: Port
-        sync: false
+      - key: MYSQL_PORT
+        value: "4000"
       - key: MYSQL_NAME
-        value: defaultdb
-      - key: MYSQL_USER
-        value: avnadmin
-      - key: MYSQL_PASSWORD      # Aiven: Password
+        value: motorlane
+      - key: MYSQL_USER          # TiDB: Connect > User (looks like xxxx.root)
+        sync: false
+      - key: MYSQL_PASSWORD      # TiDB: Connect > Generate Password
         sync: false
       - key: MYSQL_SSL
+        value: "1"
+      - key: MYSQL_TIDB
         value: "1"
       - key: GUNICORN_WORKERS
         value: "2"
