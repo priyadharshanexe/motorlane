@@ -6,6 +6,7 @@ services:
     name: motorlane
     runtime: docker
     plan: free
+    region: singapore
     dockerfilePath: ./Dockerfile
     dockerContext: .
     dockerCommand: sh docker/render.sh
