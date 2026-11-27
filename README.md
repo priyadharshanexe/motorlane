@@ -1,11 +1,3 @@
-
-
-https://github.com/user-attachments/assets/abf292c0-0147-4bce-9c4e-912df82d640d
-
-
-
-https://github.com/user-attachments/assets/a4984c8a-48df-4808-a17d-c6a88c8c7c24
-
 # Motorlane - Vehicle Rental Marketplace
 
 [GitHub repository](https://github.com/priyadharshanexe/motorlane) · Live demo: [motorlane-4bmn.onrender.com](https://motorlane-4bmn.onrender.com) · [Demo script](docs/demo-script.md)
