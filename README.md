@@ -1,6 +1,6 @@
 # Motorlane - Vehicle Rental Marketplace
 
-[GitHub repository](https://github.com/priyadharshanexe/motorlane) · Live demo: _coming soon_ (link added once deployed) · [Demo script](docs/demo-script.md)
+[GitHub repository](https://github.com/priyadharshanexe/motorlane) · Live demo: [motorlane-4bmn.onrender.com](https://motorlane-4bmn.onrender.com) · [Demo script](docs/demo-script.md)
 
 Browse cars and bikes, request a rental for selected dates, and follow the
 booking through pickup and return. Vehicle owners manage their fleet,
@@ -9,6 +9,10 @@ availability, incoming requests, maintenance, and completed booking value.
 ![Motorlane marketplace homepage](docs/screenshots/marketplace.jpg)
 
 Screenshots refreshed on 23 November 2026 from the Docker app in the night theme, after the Odometer redesign. Signed-in pages use the seeded demo accounts.
+
+## Watch the 3-minute demo
+
+<!-- Drag motorlane-demo.mp4 here in GitHub's editor -->
 
 ![A rental end to end: search, the catalog, a vehicle, the trip sheet with the time road, the request, the owner approving on the departures board, the demo payment with the key tag, the booking timeline with the paid stop, the owner's instrument cluster and the value report](docs/screenshots/journey.gif)
 
