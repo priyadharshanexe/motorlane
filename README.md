@@ -1,6 +1,6 @@
 # Motorlane - Vehicle Rental Marketplace
 
-[GitHub repository](https://github.com/priyadharshanexe/motorlane) · Live demo: [motorlane-4bmn.onrender.com](https://motorlane-4bmn.onrender.com) · [Demo script](docs/demo-script.md)
+**Live demo:** [motorlane-4bmn.onrender.com](https://motorlane-4bmn.onrender.com) · [Demo script](docs/demo-script.md)
 
 Browse cars and bikes, request a rental for selected dates, and follow the
 booking through pickup and return. Vehicle owners manage their fleet,
@@ -8,17 +8,15 @@ availability, incoming requests, maintenance, and completed booking value.
 
 ![Motorlane marketplace homepage](docs/screenshots/marketplace.jpg)
 
-Screenshots refreshed on 23 November 2026 from the Docker app in the night theme, after the Odometer redesign. Signed-in pages use the seeded demo accounts.
-
-## Watch the 3-minute demo
-
-
+## Watch the demo
 
 https://github.com/user-attachments/assets/09510261-c562-46f2-9d72-b8f63ab5459b
 
-
+## A rental, end to end
 
 ![A rental end to end: search, the catalog, a vehicle, the trip sheet with the time road, the request, the owner approving on the departures board, the demo payment with the key tag, the booking timeline with the paid stop, the owner's instrument cluster and the value report](docs/screenshots/journey.gif)
+
+<sub>Screenshots and GIF from the Docker app in the night theme, 23 November 2026. Signed-in pages use the seeded demo accounts.</sub>
 
 ## Architecture
 
@@ -222,7 +220,7 @@ openly licensed Wikimedia Commons images credited in [CREDITS.md](CREDITS.md).
 
 Run `python manage.py test`, `npm --prefix frontend test`,
 `npm --prefix frontend run lint`, and `npm --prefix frontend run build`.
-The Django suite (170+ tests) covers every status transition and permission,
+The Django suite (200 tests) covers every status transition and permission,
 pricing, expiry, the email outbox, payments, refund intents and duplicate webhooks, concurrency
 on MySQL, and a full rental through the API. CI runs settings checks,
 migration checks (forward and reverse), OpenAPI validation and the suite on
@@ -233,6 +231,8 @@ Production settings: HSTS for one year with preload, a Content-Security-Policy
 with per-request script nonces, JSON log lines (`DJANGO_LOG_FORMAT`), pooled
 database connections (`DJANGO_CONN_MAX_AGE`), and `manage.py check` validation
 of rental and payment settings.
+
+## More screenshots
 
 [Catalog](docs/screenshots/catalog.jpg) · [Booking timeline](docs/screenshots/booking.jpg) · [Owner departures board](docs/screenshots/owner.jpg) · [Design direction](docs/design-direction.md) · [Demo photo credits](rental/demo_images/CREDITS.md)
 
