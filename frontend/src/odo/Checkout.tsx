@@ -50,6 +50,10 @@ export function Checkout() {
   const [accepted, setAccepted] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [tearing, setTearing] = useState(false);
+  // The quote the request was sent with. A successful request refreshes every query, and the
+  // re-fetched quote would show this renter's own new booking as "already booked" for the
+  // half second before the booking page opens.
+  const [sentQuote, setSentQuote] = useState<Quote | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const vehicle = useQuery({ queryKey: ["vehicle", id], queryFn: () => api<VehicleDetail>(`vehicles/${id}/`) });
   const validDates = isRentalDate(start) && isRentalDate(end) && start >= rentalToday() && end >= start;
@@ -58,12 +62,13 @@ export function Checkout() {
     queryKey: ["checkout-quote", id, start, end, pickupTime, returnTime],
     queryFn: () => api<Quote>(`vehicles/${id}/quote/?${new URLSearchParams({ start_date: start, end_date: end, pickup_time: pickupTime, return_time: returnTime })}`),
   });
+  const shownQuote = sentQuote ?? quote.data;
   useChapters(root, [vehicle.data?.id]);
 
   // What the time roads show: past time today, and (from the API) the booked stretch before the earliest free pickup,
   // whose last two hours are the cleaning window.
   const [nowDate, nowTime] = kolkata(new Date());
-  const earliest = quote.data?.available === false && quote.data.earliest_pickup ? kolkata(new Date(quote.data.earliest_pickup)) : null;
+  const earliest = shownQuote?.available === false && shownQuote.earliest_pickup ? kolkata(new Date(shownQuote.earliest_pickup)) : null;
   const pickupBlocked = useMemo<Blocked[]>(() => {
     const spans: Blocked[] = [];
     if (start === nowDate) spans.push({ from: 0, to: Math.min(SLOTS, toSlot(roundUp(nowTime)) + 1) });
@@ -121,7 +126,7 @@ export function Checkout() {
   );
   if (vehicle.isPending) return <div className="od-page-loading" style={{ minHeight: "100vh" }} />;
   if (!vehicle.data) return <VehicleMissing error={vehicle.error} retry={() => vehicle.refetch()} />;
-  const v = vehicle.data, q = quote.data;
+  const v = vehicle.data, q = shownQuote;
   const due = q ? Number(q.due_now) : 0;
 
   return (
@@ -213,8 +218,10 @@ export function Checkout() {
             const found = { contact_name: check("contact_name", data.contact_name ?? ""), contact_phone: check("contact_phone", data.contact_phone ?? "") };
             setErrors(found);
             if (found.contact_name || found.contact_phone || !accepted || !q || write.isPending) return;
+            setSentQuote(q);
             write.mutate({ path: "bookings/", body: { vehicle_id: v.id, start_date: start, end_date: end, checkout: true, accepted_conditions: accepted,
               pickup_time: toTime(pickup), return_time: toTime(dropoff), ...data } }, {
+              onError: () => setSentQuote(null),
               onSuccess: result => {
                 if (reducedMotion()) { navigate(`/bookings/${result.id}`); return; }
                 setTearing(true);  // the stub tears off, then the booking page opens
