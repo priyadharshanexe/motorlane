@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/a4984c8a-48df-4808-a17d-c6a88c8c7c24
+
 # Motorlane - Vehicle Rental Marketplace
 
 [GitHub repository](https://github.com/priyadharshanexe/motorlane) · Live demo: [motorlane-4bmn.onrender.com](https://motorlane-4bmn.onrender.com) · [Demo script](docs/demo-script.md)
@@ -12,7 +16,7 @@ Screenshots refreshed on 23 November 2026 from the Docker app in the night theme
 
 ## Watch the 3-minute demo
 
-<!-- Drag motorlane-demo.mp4 here in GitHub's editor -->
+
 
 ![A rental end to end: search, the catalog, a vehicle, the trip sheet with the time road, the request, the owner approving on the departures board, the demo payment with the key tag, the booking timeline with the paid stop, the owner's instrument cluster and the value report](docs/screenshots/journey.gif)
 
